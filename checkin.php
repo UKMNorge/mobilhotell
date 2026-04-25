@@ -2,18 +2,23 @@
 require __DIR__ . '/db.php';
 header('Content-Type: application/json');
 
+function fail(string $error): void
+{
+    echo json_encode(['success' => false, 'error' => $error]);
+    exit;
+}
+
 $qr = trim($_GET['qr'] ?? '');
 $type = $_GET['type'] ?? '';
 
 if ($qr === '' || !in_array($type, ['storage', 'charging'], true)) {
-    echo json_encode(['success' => false, 'error' => 'bad_request']);
-    exit;
+    fail('bad_request');
 }
 
 try {
     $pdo->beginTransaction();
 
-    $stmt = $pdo->prepare("SELECT * FROM participants WHERE qr_code = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT * FROM participants WHERE qr_code = ? LIMIT 1 FOR UPDATE");
     $stmt->execute([$qr]);
     $p = $stmt->fetch();
 
@@ -27,6 +32,7 @@ try {
         WHERE participant_id = ?
           AND status = 'checked_in'
         LIMIT 1
+                FOR UPDATE
     ");
     $stmt->execute([$p['id']]);
 
@@ -58,29 +64,33 @@ try {
 
     $stmt = $pdo->prepare("
         INSERT INTO phone_sessions
-        (participant_id, slot_id, delivery_type, checkin_time, status)
-        VALUES (?, ?, ?, NOW(), 'checked_in')
+        (participant_id, slot_id, delivery_type, checkin_time, status, session_token)
+        VALUES (?, ?, ?, NOW(), 'checked_in', ?)
     ");
-    $stmt->execute([$p['id'], $slot['id'], $type]);
+    $token = bin2hex(random_bytes(32));
+    $stmt->execute([$p['id'], $slot['id'], $type, $token]);
 
     $sessionId = $pdo->lastInsertId();
 
     $pdo->commit();
+
+    $checkoutUrl = 'checkout.php?token=' . rawurlencode($token);
 
     echo json_encode([
         'success' => true,
         'session_id' => $sessionId,
         'slot' => $slot['slot_number'],
         'name' => $p['first_name'] . ' ' . $p['last_name'],
-        'type' => $type
+        'type' => $type,
+        'checked_in_at' => date('Y-m-d H:i:s'),
+        'session_token' => $token,
+        'checkout_url' => $checkoutUrl,
+        'checkout_qr_text' => $checkoutUrl
     ]);
 } catch (Exception $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
 
-    echo json_encode([
-        'success' => false,
-        'error' => $e->getMessage()
-    ]);
+    fail($e->getMessage());
 }
