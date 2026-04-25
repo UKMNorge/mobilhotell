@@ -1,39 +1,62 @@
 <?php
+
+declare(strict_types=1);
+
 require __DIR__ . '/db.php';
+
 header('Content-Type: application/json');
 
+$pdo = db();
 $id = (int)($_GET['id'] ?? 0);
-$token = trim($_GET['token'] ?? '');
+$token = trim((string)($_GET['token'] ?? ''));
 
 if ($id <= 0 && $token === '') {
     echo json_encode(['success' => false, 'error' => 'missing_identifier']);
     exit;
 }
 
-$stmt = null;
 if ($id > 0) {
-    $stmt = $pdo->prepare("
-        UPDATE phone_sessions
-        SET checkout_time = NOW(),
-            status = 'checked_out'
-        WHERE id = ?
-          AND status = 'checked_in'
-    ");
-    $stmt->execute([$id]);
+    $find = $pdo->prepare("SELECT ps.id, ps.participant_id, p.first_name, p.last_name
+        FROM phone_sessions ps
+        JOIN participants p ON p.id = ps.participant_id
+        WHERE ps.id = ? AND ps.status = 'checked_in'
+        LIMIT 1");
+    $find->execute([$id]);
 } else {
-    $stmt = $pdo->prepare("
-        UPDATE phone_sessions
-        SET checkout_time = NOW(),
-            status = 'checked_out'
-        WHERE session_token = ?
-          AND status = 'checked_in'
-    ");
-    $stmt->execute([$token]);
+    $find = $pdo->prepare("SELECT ps.id, ps.participant_id, p.first_name, p.last_name
+        FROM phone_sessions ps
+        JOIN participants p ON p.id = ps.participant_id
+        WHERE ps.session_token = ? AND ps.status = 'checked_in'
+        LIMIT 1");
+    $find->execute([$token]);
 }
 
-$ok = $stmt->rowCount() > 0;
+$session = $find->fetch();
+if (!$session) {
+    echo json_encode(['success' => false, 'error' => 'session_not_checked_in']);
+    exit;
+}
+
+$update = $pdo->prepare("UPDATE phone_sessions
+    SET checkout_time = datetime('now'), status = 'checked_out'
+    WHERE id = ? AND status = 'checked_in'");
+$update->execute([(int)$session['id']]);
+
+if ($update->rowCount() <= 0) {
+    echo json_encode(['success' => false, 'error' => 'session_not_checked_in']);
+    exit;
+}
+
+$sum = $pdo->prepare("SELECT COALESCE(SUM(strftime('%s', checkout_time) - strftime('%s', checkin_time)), 0) AS seconds
+    FROM phone_sessions
+    WHERE participant_id = ?
+      AND checkout_time IS NOT NULL");
+$sum->execute([(int)$session['participant_id']]);
+$seconds = (int)$sum->fetchColumn();
 
 echo json_encode([
-    'success' => $ok,
-    'error' => $ok ? null : 'session_not_checked_in'
+    'success' => true,
+    'error' => null,
+    'name' => trim((string)$session['first_name'] . ' ' . (string)$session['last_name']),
+    'screenfree_seconds' => $seconds
 ]);

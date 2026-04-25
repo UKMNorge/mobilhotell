@@ -1,0 +1,4 @@
+-- SQLite-based Mobilhotell
+-- No manual migration is required.
+-- Schema is auto-created on first request by db.php.
+-- Database file: data/mobilhotell.sqlite
