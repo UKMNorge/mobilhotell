@@ -1,4 +1,5 @@
 vendor/
-images/**
+images/*
+!images/.gitkeep
 data/*.sqlite
 data/*.sqlite-*
