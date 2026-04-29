@@ -1,0 +1,6 @@
+qr_code,first_name,last_name,county,participant_type,image_path
+CSV-001,Aina,Hansen,Oslo,Utøver,images/julia.jpg
+CSV-002,Jonas,Berg,Vestland,Crew,images/magnus.jpg
+CSV-003,Sara,Dahl,Trøndelag,Utøver,images/yrja.jpg
+CSV-004,Emil,Lunde,Agder,Frivillig,images/torstein.jpg
+CSV-005,Nora,Lie,Rogaland,Utøver,images/karoline.jpg

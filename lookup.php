@@ -66,10 +66,15 @@ $activeStmt = $pdo->prepare("SELECT ps.id AS session_id, s.slot_number
 $activeStmt->execute([(int)$p['id']]);
 $active = $activeStmt->fetch();
 
-$totalStmt = $pdo->prepare("SELECT COALESCE(SUM(strftime('%s', checkout_time) - strftime('%s', checkin_time)), 0) AS seconds
+$totalStmt = $pdo->prepare("SELECT COALESCE(SUM(
+        CASE
+            WHEN status = 'checked_out' AND checkout_time IS NOT NULL THEN strftime('%s', checkout_time) - strftime('%s', checkin_time)
+            WHEN status = 'checked_in' THEN strftime('%s', datetime('now')) - strftime('%s', checkin_time)
+            ELSE 0
+        END
+    ), 0) AS seconds
     FROM phone_sessions
-    WHERE participant_id = ?
-      AND checkout_time IS NOT NULL");
+    WHERE participant_id = ?");
 $totalStmt->execute([(int)$p['id']]);
 $total = (int)$totalStmt->fetchColumn();
 

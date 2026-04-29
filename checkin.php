@@ -59,6 +59,58 @@ try {
     $sessionId = (int)$pdo->lastInsertId();
     $pdo->commit();
 
+    // Non-blocking direct print from check-in flow with lock/timeout.
+    $printScript = __DIR__ . '/print_receipt.php';
+    $printStarted = false;
+    if (is_file($printScript)) {
+        $phpBin = is_executable('/usr/bin/php') ? '/usr/bin/php' : 'php';
+        $flockBin = is_executable('/usr/bin/flock') ? '/usr/bin/flock' : 'flock';
+        $timeoutBin = is_executable('/usr/bin/timeout') ? '/usr/bin/timeout' : 'timeout';
+        $logFile = __DIR__ . '/data/print.log';
+        $lockFile = __DIR__ . '/data/print.lock';
+
+        if (!is_file($lockFile)) {
+            @touch($lockFile);
+        }
+        if (!is_file($logFile)) {
+            @touch($logFile);
+        }
+        @chmod($lockFile, 0666);
+        @chmod($logFile, 0666);
+
+        $inner = sprintf(
+            '%s -w 8 %s %s 20s %s %s --session-id=%d',
+            escapeshellcmd($flockBin),
+            escapeshellarg($lockFile),
+            escapeshellcmd($timeoutBin),
+            escapeshellcmd($phpBin),
+            escapeshellarg($printScript),
+            $sessionId
+        );
+        $cmd = 'nohup /bin/sh -c ' . escapeshellarg($inner) . ' >> ' . escapeshellarg($logFile) . ' 2>&1 &';
+        $out = [];
+        $code = 1;
+        exec($cmd, $out, $code);
+        $printStarted = ($code === 0);
+
+        if (!$printStarted) {
+            log_event($pdo, 'print_enqueue_error', 'Klarte ikke starte utskrift', [
+                'session_id' => $sessionId,
+                'cmd' => $cmd,
+                'exit_code' => $code,
+            ]);
+        }
+    }
+
+    log_event($pdo, 'checkin', 'Telefon innlevert', [
+        'session_id' => $sessionId,
+        'participant_id' => (int)$participant['id'],
+        'qr' => $participant['qr_code'],
+        'slot' => $slot['slot_number'],
+        'type' => $type,
+        'print_started' => $printStarted
+    ]);
+
     $checkoutUrl = 'checkout.php?token=' . rawurlencode($token);
 
     echo json_encode([
@@ -79,5 +131,10 @@ try {
 
     $known = ['participant_not_found', 'already_checked_in', 'no_free_slot'];
     $msg = $e->getMessage();
+    log_event($pdo, 'checkin_error', 'Innsjekk feilet', [
+        'qr' => $qr,
+        'type' => $type,
+        'error' => in_array($msg, $known, true) ? $msg : 'server_error'
+    ]);
     fail(in_array($msg, $known, true) ? $msg : 'server_error');
 }

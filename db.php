@@ -19,6 +19,13 @@ function db(): PDO
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
+    // Runtime tuning for concurrent kiosk/admin traffic on constrained hardware.
+    $pdo->exec('PRAGMA journal_mode = WAL');
+    $pdo->exec('PRAGMA synchronous = NORMAL');
+    $pdo->exec('PRAGMA temp_store = MEMORY');
+    $pdo->exec('PRAGMA busy_timeout = 5000');
+    $pdo->exec('PRAGMA foreign_keys = ON');
+
     initialize_schema($pdo);
 
     return $pdo;
@@ -83,6 +90,46 @@ function initialize_schema(PDO $pdo): void
     if ($version < 3) {
         backfill_participant_images($pdo, __DIR__ . '/images');
         $pdo->exec('PRAGMA user_version = 3');
+        $version = 3;
+    }
+
+    if ($version < 4) {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS event_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            metadata_json TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )");
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_event_logs_created_at ON event_logs(created_at DESC)');
+        $pdo->exec('PRAGMA user_version = 4');
+        $version = 4;
+    }
+
+    if ($version < 5) {
+        ensure_slot_capacity($pdo, 'storage', 'S', 180);
+        ensure_slot_capacity($pdo, 'charging', 'L', 120);
+        $pdo->exec('PRAGMA user_version = 5');
+    }
+}
+
+function ensure_slot_capacity(PDO $pdo, string $slotType, string $prefix, int $targetCount): void
+{
+    $countStmt = $pdo->prepare('SELECT COUNT(*) FROM slots WHERE slot_type = ?');
+    $countStmt->execute([$slotType]);
+    $existingCount = (int)$countStmt->fetchColumn();
+    if ($existingCount >= $targetCount) {
+        return;
+    }
+
+    $maxStmt = $pdo->prepare("SELECT MAX(CAST(SUBSTR(slot_number, 2) AS INTEGER)) FROM slots WHERE slot_type = ?");
+    $maxStmt->execute([$slotType]);
+    $maxNumber = (int)$maxStmt->fetchColumn();
+
+    $insertStmt = $pdo->prepare('INSERT INTO slots(slot_number, slot_type, is_active) VALUES (?, ?, 1)');
+    for ($n = $maxNumber + 1; $existingCount < $targetCount; $n++, $existingCount++) {
+        $slotNumber = $prefix . str_pad((string)$n, 3, '0', STR_PAD_LEFT);
+        $insertStmt->execute([$slotNumber, $slotType]);
     }
 }
 
@@ -199,4 +246,14 @@ function backfill_participant_images(PDO $pdo, string $imagesDir): void
         $update->execute([$imagePath, (int)$p['id']]);
         $i++;
     }
+}
+
+function log_event(PDO $pdo, string $eventType, string $message, array $metadata = []): void
+{
+    $stmt = $pdo->prepare('INSERT INTO event_logs(event_type, message, metadata_json, created_at) VALUES (?, ?, ?, datetime(\'now\'))');
+    $stmt->execute([
+        $eventType,
+        $message,
+        $metadata ? json_encode($metadata, JSON_UNESCAPED_UNICODE) : null
+    ]);
 }

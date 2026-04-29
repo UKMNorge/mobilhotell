@@ -54,6 +54,13 @@ $sum = $pdo->prepare("SELECT COALESCE(SUM(strftime('%s', checkout_time) - strfti
 $sum->execute([(int)$session['participant_id']]);
 $seconds = (int)$sum->fetchColumn();
 
+log_event($pdo, 'checkout', 'Telefon utlevert', [
+    'session_id' => (int)$session['id'],
+    'participant_id' => (int)$session['participant_id'],
+    'name' => trim((string)$session['first_name'] . ' ' . (string)$session['last_name']),
+    'screenfree_seconds' => $seconds
+]);
+
 echo json_encode([
     'success' => true,
     'error' => null,

@@ -12,19 +12,136 @@ body {
   color: #fff;
   text-align: center;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100dvh;
+  overflow: hidden;
+  cursor: none;
+}
+body * {
+  cursor: none !important;
 }
 main {
-  max-width: 1000px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 14px;
+  padding: 16px 20px 22px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 h1 {
   margin: 8px 0 2px;
-  font-size: 42px;
+  font-size: clamp(42px, 4.2vw, 58px);
+}
+.top-tools {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(16, 36, 33, 0.94);
+  backdrop-filter: blur(2px);
+}
+.chip {
+  border: 0;
+  border-radius: 12px;
+  padding: 16px 16px;
+  font-size: clamp(18px, 1.6vw, 24px);
+  font-weight: 700;
+  min-height: 62px;
+  background: #ecf1ed;
+  color: #17332f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chip.offline {
+  background: #be2c22;
+  color: #fff;
+}
+.chip-link {
+  text-decoration: none;
+}
+.admin-panel {
+  margin: 8px auto 12px;
+  max-width: 1200px;
+  text-align: left;
+  background: rgba(11, 33, 30, 0.95);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 14px;
+  padding: 14px;
+}
+.admin-panel[hidden] {
+  display: none;
+}
+body.keyboard-open .admin-panel {
+  display: none;
+}
+.admin-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.admin-panel h2 {
+  margin: 0;
+  font-size: 28px;
+}
+.admin-link {
+  display: inline-block;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #e8efea;
+  color: #17332f;
+  font-weight: 700;
+  text-decoration: none;
+}
+.capacity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.capacity-card {
+  background: rgba(255,255,255,.1);
+  border-radius: 12px;
+  padding: 10px;
+}
+.capacity-label {
+  font-size: 19px;
+  font-weight: 700;
+}
+.capacity-meta {
+  font-size: 22px;
+  margin: 6px 0;
+}
+.capacity-track {
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.2);
+  overflow: hidden;
+}
+.capacity-fill {
+  height: 100%;
+  background: #2bd074;
+  width: 0;
+}
+.capacity-fill.warn {
+  background: #f2b936;
+}
+.capacity-fill.danger {
+  background: #d4493f;
 }
 p {
   margin: 0 0 10px;
-  font-size: 22px;
+  font-size: clamp(22px, 2vw, 32px);
+}
+.subhead {
+  margin-bottom: 8px;
 }
 #scanner {
   position: absolute;
@@ -33,20 +150,36 @@ p {
 }
 #search {
   width: 100%;
-  max-width: 900px;
-  font-size: 28px;
-  padding: 16px;
+  max-width: 1200px;
+  font-size: clamp(28px, 2.2vw, 38px);
+  padding: 18px;
   border-radius: 14px;
+  border: 2px solid #d8e2dc;
+}
+.search-tools {
+  margin: 8px auto 0;
+  max-width: 1200px;
+  display: flex;
+  justify-content: flex-end;
+}
+.search-tools button {
   border: 0;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 20px;
+  background: #ecf1ed;
+  color: #17332f;
 }
 #results {
   background: #fff;
   color: #111;
   margin: 6px auto 0;
-  max-width: 900px;
+  max-width: 1200px;
   border-radius: 12px;
   text-align: left;
   overflow: hidden;
+  max-height: 24dvh;
+  overflow-y: auto;
 }
 #results button {
   display: block;
@@ -54,45 +187,54 @@ p {
   border: 0;
   border-top: 1px solid #ddd;
   background: #fff;
-  padding: 14px;
+  padding: 18px;
   text-align: left;
-  font-size: 22px;
+  font-size: clamp(22px, 1.8vw, 30px);
+  min-height: 86px;
 }
 .card {
-  margin-top: 16px;
+  margin-top: 12px;
   background: rgba(255, 255, 255, .09);
   border: 1px solid rgba(255, 255, 255, .2);
-  border-radius: 14px;
-  padding: 16px;
+  border-radius: 16px;
+  padding: 14px;
+  text-align: center;
 }
 .name {
-  font-size: 44px;
+  font-size: clamp(40px, 3.4vw, 58px);
   font-weight: 700;
 }
 .avatar {
-  width: 170px;
-  height: 170px;
+  width: 220px;
+  height: 220px;
   border-radius: 12px;
   object-fit: cover;
   border: 2px solid rgba(255,255,255,.35);
-  margin-bottom: 10px;
+  display: block;
+  margin: 0 auto 8px;
   background: rgba(255,255,255,.16);
 }
 .slot {
-  font-size: 88px;
+  font-size: clamp(76px, 7vw, 110px);
   color: #7dff99;
   font-weight: 800;
-  margin: 8px 0;
+  margin: 6px 0;
+}
+.action-row {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 .btn {
   border: 0;
-  border-radius: 12px;
-  padding: 16px 24px;
-  margin: 8px;
-  font-size: 28px;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin: 0;
+  font-size: clamp(28px, 2.3vw, 38px);
   cursor: pointer;
-  min-height: 70px;
-  min-width: 220px;
+  min-height: 82px;
+  min-width: 0;
 }
 .btn-primary { background: #0d8f4a; color: #fff; }
 .btn-warn { background: #f5c84b; color: #111; }
@@ -103,52 +245,247 @@ p {
   font-size: 28px;
 }
 .loading {
-  font-size: 24px;
-  margin-top: 10px;
+  font-size: 30px;
+  margin-top: 8px;
 }
 .receipt {
   background: #fff;
   color: #111;
-  border-radius: 10px;
-  padding: 14px;
+  border-radius: 14px;
+  padding: 0;
   display: inline-block;
   text-align: left;
+  overflow: hidden;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  max-width: 760px;
+}
+.receipt-head {
+  background: linear-gradient(120deg, #153e37, #1d6d5f);
+  color: #fff;
+  padding: 12px 16px;
+}
+.receipt-logo {
+  display: block;
+  width: 140px;
+  height: auto;
+  margin: 0 0 8px;
+  filter: brightness(0) invert(1);
+}
+.receipt-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+}
+.receipt-sub {
+  margin: 4px 0 0;
+  font-size: 16px;
+  opacity: 0.92;
+}
+.receipt-body {
+  padding: 14px 16px;
+}
+.receipt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+.receipt-item {
+  background: #f3f7f4;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.receipt-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #5a6861;
+  letter-spacing: .04em;
+}
+.receipt-value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.receipt-note {
+  margin-top: 10px;
+  border: 1px dashed #9aa9a2;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 16px;
 }
 .qr-box {
   margin-top: 10px;
   border-top: 1px dashed #888;
   padding-top: 10px;
 }
+.qr-grid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.qr-item {
+  flex: 1 1 180px;
+  text-align: center;
+}
+.qr-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
 .qr-text {
-  font-size: 12px;
+  font-size: 14px;
   word-break: break-all;
 }
+.print-only { display: none; }
+.osk {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  z-index: 30;
+  background: rgba(8, 24, 22, 0.97);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.42);
+  display: none;
+}
+.osk.visible {
+  display: block;
+}
+.osk-row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.osk-row:last-child {
+  margin-bottom: 0;
+}
+.osk-key {
+  border: 0;
+  border-radius: 12px;
+  min-height: 78px;
+  font-size: 30px;
+  font-weight: 700;
+  background: #e7efea;
+  color: #12322f;
+}
+.osk-key.wide {
+  grid-column: span 2;
+  font-size: 24px;
+}
+.osk-key.space {
+  grid-column: span 8;
+}
+.osk-key:active {
+  transform: translateY(2px) scale(0.98);
+}
+.osk-key.pressed,
+.osk-key:active {
+  background: #ffd463;
+  color: #0f2f2b;
+  box-shadow: inset 0 0 0 3px rgba(15, 47, 43, 0.25);
+}
+.osk-key.special {
+  background: #c7d5cd;
+}
+.stage {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#view {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+#view .card {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+body.showing-card h1,
+body.showing-card .subhead,
+body.showing-card #search,
+body.showing-card #results,
+body.showing-card .search-tools {
+  display: none;
+}
+body.showing-card .avatar {
+  width: clamp(220px, 27vh, 320px);
+  height: clamp(220px, 27vh, 320px);
+}
 @media (max-width: 780px) {
-  h1 { font-size: 32px; }
-  p { font-size: 18px; }
+  .top-tools {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  h1 { font-size: 34px; }
+  p { font-size: 20px; }
   #search { font-size: 24px; }
   .name { font-size: 34px; }
-  .slot { font-size: 68px; }
+  .slot { font-size: 58px; }
+  .avatar { width: 160px; height: 160px; }
+  .action-row { grid-template-columns: 1fr; }
+  .capacity-grid { grid-template-columns: 1fr; }
   .btn {
-    width: calc(100% - 16px);
-    margin: 8px;
-    font-size: 26px;
+    width: 100%;
+    font-size: 22px;
   }
+}
+@media (max-height: 760px) {
+  body.showing-card .avatar {
+    width: 180px;
+    height: 180px;
+  }
+}
+@media print {
+  body { background: #fff; color: #111; }
+  main > h1, main > p, #search, #results, #loading, .top-tools { display: none !important; }
+  #view { margin-top: 0; }
+  .card { background: #fff; border: 1px solid #ddd; color: #111; }
+  .print-only { display: block; }
 }
 </style>
 </head>
 <body>
 <main>
   <h1>Scan QR-kode</h1>
-  <p>eller søk deltakernavn</p>
+  <p class="subhead">eller søk deltakernavn</p>
+
+  <div class="top-tools">
+    <button id="btnFocus" class="chip">Reaktiver scanner</button>
+    <button id="btnReset" class="chip">Tøm skjerm</button>
+    <span id="netState" class="chip">Online</span>
+  </div>
+
+  <section id="adminPanel" class="admin-panel">
+    <div class="admin-panel-head">
+      <h2>Kapasitet</h2>
+      <a class="admin-link" href="admin.php">Åpne adminside</a>
+    </div>
+    <div id="capacityGrid" class="capacity-grid"></div>
+  </section>
 
   <input id="scanner" autocomplete="off">
   <input id="search" type="search" autocomplete="off" placeholder="Søk navn eller QR">
+  <div class="search-tools">
+    <button id="btnClearSearch" type="button">Tøm søk</button>
+  </div>
   <div id="results"></div>
 
-  <div id="loading" class="loading" style="display:none">Laster...</div>
-  <div id="view"></div>
+  <div class="stage">
+    <div id="loading" class="loading" style="display:none">Laster...</div>
+    <div id="view"></div>
+  </div>
 </main>
+
+<div id="osk" class="osk" aria-hidden="true">
+  <div id="oskRows"></div>
+</div>
 
 <script>
 (() => {
@@ -157,6 +494,14 @@ p {
   const results = document.getElementById('results');
   const loading = document.getElementById('loading');
   const view = document.getElementById('view');
+  const btnFocus = document.getElementById('btnFocus');
+  const btnReset = document.getElementById('btnReset');
+  const btnClearSearch = document.getElementById('btnClearSearch');
+  const netState = document.getElementById('netState');
+  const adminPanel = document.getElementById('adminPanel');
+  const capacityGrid = document.getElementById('capacityGrid');
+  const osk = document.getElementById('osk');
+  const oskRows = document.getElementById('oskRows');
 
   let searchTimer = null;
   let resetTimer = null;
@@ -164,22 +509,147 @@ p {
   let scanStart = 0;
   let scanLast = 0;
   let scanResetTimer = null;
+  let lastScanQr = '';
+  let lastScanAt = 0;
+  let oskTarget = null;
+  let oskShift = false;
+
+  const oskLayout = [
+    ['1','2','3','4','5','6','7','8','9','0','backspace'],
+    ['q','w','e','r','t','y','u','i','o','p','å'],
+    ['a','s','d','f','g','h','j','k','l','ø','æ'],
+    ['shift','z','x','c','v','b','n','m',',','.','-'],
+    ['space','enter','close']
+  ];
+
+  function isTextField(el) {
+    if (!el) return false;
+    if (el.id === 'scanner') return false;
+    if (el.matches('input[type="text"], input[type="search"], input:not([type]), textarea')) return true;
+    return false;
+  }
+
+  function getKeyLabel(key) {
+    if (key === 'backspace') return 'Slett';
+    if (key === 'shift') return 'Skift';
+    if (key === 'space') return 'Mellomrom';
+    if (key === 'enter') return 'Enter';
+    if (key === 'close') return 'Lukk';
+    if (oskShift && /^[a-zæøå]$/.test(key)) return key.toUpperCase();
+    return key;
+  }
+
+  function createKeyboard() {
+    oskRows.innerHTML = oskLayout.map((row) => {
+      return '<div class="osk-row">' + row.map((key) => {
+        const classes = ['osk-key'];
+        if (key === 'backspace' || key === 'shift' || key === 'enter' || key === 'close') classes.push('wide', 'special');
+        if (key === 'space') classes.push('space', 'special');
+        return '<button type="button" class="' + classes.join(' ') + '" data-key="' + esc(key) + '">' + esc(getKeyLabel(key)) + '</button>';
+      }).join('') + '</div>';
+    }).join('');
+  }
+
+  function showKeyboard(target) {
+    oskTarget = target;
+    document.body.classList.add('keyboard-open');
+    osk.classList.add('visible');
+    osk.setAttribute('aria-hidden', 'false');
+  }
+
+  function hideKeyboard() {
+    document.body.classList.remove('keyboard-open');
+    osk.classList.remove('visible');
+    osk.setAttribute('aria-hidden', 'true');
+    oskTarget = null;
+    oskShift = false;
+    createKeyboard();
+  }
+
+  function insertText(target, text) {
+    const start = target.selectionStart ?? target.value.length;
+    const end = target.selectionEnd ?? target.value.length;
+    const value = target.value;
+    target.value = value.slice(0, start) + text + value.slice(end);
+    const next = start + text.length;
+    target.setSelectionRange(next, next);
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function doBackspace(target) {
+    const start = target.selectionStart ?? target.value.length;
+    const end = target.selectionEnd ?? target.value.length;
+    if (start !== end) {
+      target.value = target.value.slice(0, start) + target.value.slice(end);
+      target.setSelectionRange(start, start);
+    } else if (start > 0) {
+      target.value = target.value.slice(0, start - 1) + target.value.slice(end);
+      target.setSelectionRange(start - 1, start - 1);
+    }
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+  }
 
   function setLoading(on) {
     loading.style.display = on ? 'block' : 'none';
+  }
+
+  function capacityFillClass(percent) {
+    if (percent >= 90) return 'capacity-fill danger';
+    if (percent >= 75) return 'capacity-fill warn';
+    return 'capacity-fill';
+  }
+
+  async function loadCapacity() {
+    try {
+      const data = await json('admin_api.php?action=capacity');
+      if (!data.success || !data.capacity) {
+        capacityGrid.innerHTML = '<div class="capacity-card">Kunne ikke hente kapasitet</div>';
+        return;
+      }
+
+      const c = data.capacity;
+      const cards = [
+        ['Oppbevaring', c.storage],
+        ['Lading', c.charging],
+        ['Totalt', c.overall],
+      ];
+
+      capacityGrid.innerHTML = cards.map(([label, stat]) => {
+        const percent = Math.max(0, Math.min(100, Number(stat.percent || 0)));
+        return '<div class="capacity-card">'
+          + '<div class="capacity-label">' + esc(label) + '</div>'
+          + '<div class="capacity-meta">' + Number(stat.occupied || 0) + ' / ' + Number(stat.total || 0) + ' (' + percent.toFixed(1) + '%)</div>'
+          + '<div class="capacity-track"><div class="' + capacityFillClass(percent) + '" style="width:' + percent + '%"></div></div>'
+          + '</div>';
+      }).join('');
+    } catch {
+      capacityGrid.innerHTML = '<div class="capacity-card">Kunne ikke hente kapasitet</div>';
+    }
   }
 
   function scheduleReset() {
     if (resetTimer) clearTimeout(resetTimer);
     resetTimer = setTimeout(() => {
       view.innerHTML = '';
+      document.body.classList.remove('showing-card');
+      hideKeyboard();
+      loadCapacity();
     }, 12000);
   }
 
   scanner.focus();
 
+  function updateNetState() {
+    const online = navigator.onLine;
+    netState.textContent = online ? 'Online' : 'Offline';
+    netState.className = online ? 'chip' : 'chip offline';
+  }
+
   async function json(url) {
     const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error('http_error');
+    }
     return await res.json();
   }
 
@@ -198,6 +668,13 @@ p {
   }
 
   async function lookupQr(qr) {
+    const now = Date.now();
+    if (qr === lastScanQr && (now - lastScanAt) < 350) {
+      return;
+    }
+    lastScanQr = qr;
+    lastScanAt = now;
+
     setLoading(true);
     try {
       const data = await json('lookup.php?qr=' + encodeURIComponent(qr));
@@ -224,7 +701,7 @@ p {
     if (p.checked_in && p.session_id) {
       actions = '<div class="slot">' + esc(p.slot) + '</div><button class="btn btn-primary" data-checkout="' + Number(p.session_id) + '">Registrer utlevert</button>';
     } else {
-      actions = '<button class="btn btn-primary" data-checkin="storage">Oppbevar</button><button class="btn btn-warn" data-checkin="charging">Lad</button>';
+      actions = '<div class="action-row"><button class="btn btn-primary" data-checkin="storage">Oppbevar</button><button class="btn btn-warn" data-checkin="charging">Lad</button></div>';
     }
 
     view.innerHTML = '<div class="card">'
@@ -234,6 +711,8 @@ p {
       + '<div>Skjermfri tid: ' + screenH + ' t ' + screenMin + ' min</div>'
       + actions
       + '</div>';
+    document.body.classList.add('showing-card');
+    hideKeyboard();
 
     const c1 = view.querySelector('[data-checkin="storage"]');
     const c2 = view.querySelector('[data-checkin="charging"]');
@@ -256,19 +735,38 @@ p {
         return;
       }
 
+      const deliveryType = type === 'charging' ? 'Lading' : 'Oppbevaring';
+
       view.innerHTML = '<div class="card">'
         + '<div class="slot">' + esc(data.slot) + '</div>'
         + '<div class="receipt">'
-        + '<h2>Kvittering</h2>'
-        + '<div><strong>Navn:</strong> ' + esc(data.name) + '</div>'
-        + '<div><strong>Slot:</strong> ' + esc(data.slot) + '</div>'
-        + '<div><strong>Tid:</strong> ' + esc(data.checked_in_at || '') + '</div>'
+        + '<div class="receipt-head">'
+        + '<img class="receipt-logo" src="assets/UKM Logo Sort RGB.png" alt="UKM logo">'
+        + '<div class="print-only" style="font-size:13px; margin-bottom:4px;">Mobilhotell kvittering</div>'
+        + '<h2 class="receipt-title">Din mobil er trygg</h2>'
+        + '<p class="receipt-sub">Vis denne ved utlevering</p>'
+        + '</div>'
+        + '<div class="receipt-body">'
+        + '<div class="receipt-grid">'
+        + '<div class="receipt-item"><div class="receipt-label">Navn</div><div class="receipt-value">' + esc(data.name) + '</div></div>'
+        + '<div class="receipt-item"><div class="receipt-label">Type</div><div class="receipt-value">' + esc(deliveryType) + '</div></div>'
+        + '<div class="receipt-item"><div class="receipt-label">Slot</div><div class="receipt-value">' + esc(data.slot) + '</div></div>'
+        + '<div class="receipt-item"><div class="receipt-label">Tid</div><div class="receipt-value">' + esc(data.checked_in_at || '') + '</div></div>'
+        + '</div>'
+        + '<div class="receipt-note"><strong>Ved utlevering:</strong> Scan deltaker-ID og bekreft bilde.</div>'
         + '<div class="qr-box">'
-        + '<img alt="QR" width="180" height="180" src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(data.checkout_qr_text || '') + '">'
-        + '<div class="qr-text">' + esc(data.checkout_qr_text || '') + '</div>'
+        + '<div class="qr-item">'
+        + '<div class="qr-title">Deltaker-kode</div>'
+        + '<img alt="Deltaker QR" width="210" height="210" src="https://api.qrserver.com/v1/create-qr-code/?size=210x210&data=' + encodeURIComponent(qr) + '">'
+        + '<div class="qr-text">' + esc(qr) + '</div>'
+        + '</div>'
+        + '</div>'
         + '</div>'
         + '</div>'
         + '</div>';
+      document.body.classList.add('showing-card');
+      hideKeyboard();
+      loadCapacity();
       scheduleReset();
     } catch {
       view.innerHTML = '<div class="error">Feil ved innsjekk</div>';
@@ -293,6 +791,9 @@ p {
           + '<div class="name" style="font-size:34px">' + esc(data.name || '') + '</div>'
           + '<div style="font-size:30px; margin-top:8px">Samlet skjermfri tid: <strong>' + hours + ' t ' + mins + ' min</strong></div>'
           + '</div>';
+        document.body.classList.add('showing-card');
+        hideKeyboard();
+        loadCapacity();
       }
       scheduleReset();
     } catch {
@@ -382,7 +883,7 @@ p {
       } catch {
         results.innerHTML = '<button disabled>Feil ved søk</button>';
       }
-    }, 120);
+    }, 80);
   });
 
   search.addEventListener('keydown', (e) => {
@@ -393,6 +894,101 @@ p {
     search.value = '';
     results.innerHTML = '';
     lookupQr(qr);
+  });
+
+  btnFocus.addEventListener('click', () => scanner.focus());
+  btnReset.addEventListener('click', () => {
+    view.innerHTML = '';
+    results.innerHTML = '';
+    search.value = '';
+    scanner.value = '';
+    document.body.classList.remove('showing-card');
+    hideKeyboard();
+    scanner.focus();
+  });
+  btnClearSearch.addEventListener('click', () => {
+    search.value = '';
+    results.innerHTML = '';
+    search.focus();
+  });
+  window.addEventListener('online', updateNetState);
+  window.addEventListener('offline', updateNetState);
+  updateNetState();
+  loadCapacity();
+  setInterval(loadCapacity, 15000);
+
+  createKeyboard();
+
+  document.addEventListener('focusin', (e) => {
+    const t = e.target;
+    if (isTextField(t)) {
+      showKeyboard(t);
+    }
+  });
+
+  document.addEventListener('focusout', () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (!isTextField(active) && !osk.contains(active)) {
+        hideKeyboard();
+      }
+    }, 0);
+  });
+
+  osk.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+
+  function clearPressedKeys() {
+    osk.querySelectorAll('.osk-key.pressed').forEach((el) => el.classList.remove('pressed'));
+  }
+
+  osk.addEventListener('pointerdown', (e) => {
+    const keyButton = e.target.closest('[data-key]');
+    if (!keyButton) return;
+    clearPressedKeys();
+    keyButton.classList.add('pressed');
+  });
+
+  osk.addEventListener('pointerup', clearPressedKeys);
+  osk.addEventListener('pointercancel', clearPressedKeys);
+  osk.addEventListener('pointerleave', clearPressedKeys);
+
+  osk.addEventListener('click', (e) => {
+    const keyButton = e.target.closest('[data-key]');
+    if (!keyButton || !oskTarget || !isTextField(oskTarget)) return;
+
+    const key = keyButton.dataset.key;
+    oskTarget.focus();
+
+    if (key === 'close') {
+      hideKeyboard();
+      return;
+    }
+    if (key === 'shift') {
+      oskShift = !oskShift;
+      createKeyboard();
+      return;
+    }
+    if (key === 'backspace') {
+      doBackspace(oskTarget);
+      return;
+    }
+    if (key === 'space') {
+      insertText(oskTarget, ' ');
+      return;
+    }
+    if (key === 'enter') {
+      oskTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      return;
+    }
+
+    const out = oskShift ? key.toUpperCase() : key;
+    insertText(oskTarget, out);
+    if (oskShift) {
+      oskShift = false;
+      createKeyboard();
+    }
   });
 
   results.addEventListener('click', async (e) => {
