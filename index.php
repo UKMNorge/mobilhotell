@@ -253,11 +253,14 @@ p {
   color: #111;
   border-radius: 14px;
   padding: 0;
-  display: inline-block;
+  display: block;
+  box-sizing: border-box;
   text-align: left;
   overflow: hidden;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
-  max-width: 760px;
+  width: min(100%, 760px);
+  max-width: 100%;
+  margin: 0 auto;
 }
 .receipt-head {
   background: linear-gradient(120deg, #153e37, #1d6d5f);
@@ -304,6 +307,7 @@ p {
   font-size: 20px;
   font-weight: 700;
   margin-top: 2px;
+  word-break: break-word;
 }
 .receipt-note {
   margin-top: 10px;
@@ -316,15 +320,20 @@ p {
   margin-top: 10px;
   border-top: 1px dashed #888;
   padding-top: 10px;
+  overflow: hidden;
 }
 .qr-grid {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 .qr-item {
-  flex: 1 1 180px;
+  flex: 0 1 210px;
+  width: 100%;
+  max-width: min(170px, calc(100vw - 88px));
   text-align: center;
+  margin: 0 auto;
 }
 .qr-title {
   font-size: 16px;
@@ -334,6 +343,13 @@ p {
 .qr-text {
   font-size: 14px;
   word-break: break-all;
+}
+.qr-item img {
+  display: block;
+  width: 100%;
+  max-width: min(170px, 100%);
+  height: auto;
+  margin: 0 auto;
 }
 .print-only { display: none; }
 .osk {
@@ -408,6 +424,27 @@ p {
   flex-direction: column;
   justify-content: center;
 }
+.card.receipt-card {
+  justify-content: flex-start;
+  align-items: center;
+  overflow-y: hidden;
+  overflow-x: hidden;
+  padding-bottom: 10px;
+  gap: 8px;
+}
+.receipt-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform-origin: top center;
+}
+.card.receipt-card .slot {
+  flex: 0 0 auto;
+}
+.card.receipt-card .receipt {
+  flex: 0 0 auto;
+}
 body.showing-card h1,
 body.showing-card .subhead,
 body.showing-card #search,
@@ -434,6 +471,79 @@ body.showing-card .avatar {
   .btn {
     width: 100%;
     font-size: 22px;
+  }
+  .receipt-head {
+    padding: 10px 12px;
+  }
+  .receipt-title {
+    font-size: 24px;
+  }
+  .receipt-sub {
+    font-size: 14px;
+  }
+  .receipt-body {
+    padding: 10px 12px;
+  }
+  .receipt-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .receipt-value {
+    font-size: 18px;
+  }
+  .qr-grid {
+    flex-direction: column;
+  }
+  .qr-item {
+    max-width: min(150px, calc(100vw - 72px));
+  }
+  .slot {
+    font-size: clamp(42px, 12vw, 58px);
+  }
+}
+@media (max-width: 1366px), (max-height: 800px) {
+  main {
+    padding: 12px 14px 16px;
+  }
+  .card {
+    padding: 10px;
+  }
+  .slot {
+    font-size: clamp(40px, 9vw, 72px);
+    margin: 4px 0;
+  }
+  .receipt-head {
+    padding: 8px 10px;
+  }
+  .receipt-logo {
+    width: 120px;
+    margin-bottom: 6px;
+  }
+  .receipt-title {
+    font-size: 22px;
+  }
+  .receipt-sub {
+    font-size: 13px;
+  }
+  .receipt-body {
+    padding: 10px;
+  }
+  .receipt-note {
+    font-size: 14px;
+    padding: 8px;
+  }
+  .qr-item {
+    max-width: min(150px, calc(100vw - 72px));
+  }
+  .qr-item img {
+    max-width: min(150px, 100%);
+  }
+  .qr-title {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+  .qr-text {
+    font-size: 12px;
   }
 }
 @media (max-height: 760px) {
@@ -637,6 +747,24 @@ body.showing-card .avatar {
     }, 12000);
   }
 
+  function fitReceiptToViewport() {
+    const card = view.querySelector('.receipt-card');
+    const stack = view.querySelector('.receipt-stack');
+    if (!card || !stack) return;
+
+    stack.style.zoom = '1';
+
+    const availableW = Math.max(0, card.clientWidth - 16);
+    const availableH = Math.max(0, card.clientHeight - 16);
+    const contentW = Math.max(1, stack.scrollWidth);
+    const contentH = Math.max(1, stack.scrollHeight);
+    const fitScale = Math.min(1, availableW / contentW, availableH / contentH);
+    const preferredScale = 0.92;
+    const scale = Math.min(preferredScale, fitScale);
+
+    stack.style.zoom = String(scale);
+  }
+
   scanner.focus();
 
   function updateNetState() {
@@ -737,7 +865,8 @@ body.showing-card .avatar {
 
       const deliveryType = type === 'charging' ? 'Lading' : 'Oppbevaring';
 
-      view.innerHTML = '<div class="card">'
+      view.innerHTML = '<div class="card receipt-card">'
+        + '<div class="receipt-stack">'
         + '<div class="slot">' + esc(data.slot) + '</div>'
         + '<div class="receipt">'
         + '<div class="receipt-head">'
@@ -755,10 +884,13 @@ body.showing-card .avatar {
         + '</div>'
         + '<div class="receipt-note"><strong>Ved utlevering:</strong> Scan deltaker-ID og bekreft bilde.</div>'
         + '<div class="qr-box">'
+        + '<div class="qr-grid">'
         + '<div class="qr-item">'
         + '<div class="qr-title">Deltaker-kode</div>'
-        + '<img alt="Deltaker QR" width="210" height="210" src="https://api.qrserver.com/v1/create-qr-code/?size=210x210&data=' + encodeURIComponent(qr) + '">'
+        + '<img alt="Deltaker QR" width="170" height="170" src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=' + encodeURIComponent(qr) + '">'
         + '<div class="qr-text">' + esc(qr) + '</div>'
+        + '</div>'
+        + '</div>'
         + '</div>'
         + '</div>'
         + '</div>'
@@ -766,6 +898,10 @@ body.showing-card .avatar {
         + '</div>';
       document.body.classList.add('showing-card');
       hideKeyboard();
+      requestAnimationFrame(() => {
+        fitReceiptToViewport();
+        requestAnimationFrame(fitReceiptToViewport);
+      });
       loadCapacity();
       scheduleReset();
     } catch {
@@ -913,6 +1049,7 @@ body.showing-card .avatar {
   });
   window.addEventListener('online', updateNetState);
   window.addEventListener('offline', updateNetState);
+  window.addEventListener('resize', fitReceiptToViewport);
   updateNetState();
   loadCapacity();
   setInterval(loadCapacity, 15000);

@@ -3,6 +3,10 @@
 
 declare(strict_types=1);
 
+// Some kiosk hardening profiles block executable memory, which breaks PCRE JIT
+// and triggers warnings that are promoted to exceptions in this script.
+ini_set('pcre.jit', '0');
+
 require __DIR__ . '/db.php';
 require __DIR__ . '/vendor/autoload.php';
 
@@ -11,9 +15,12 @@ use chillerlan\QRCode\QROptions;
 use chillerlan\QRCode\Common\EccLevel;
 use chillerlan\QRCode\Output\QRGdImagePNG;
 use Mike42\Escpos\EscposImage;
+use Mike42\Escpos\PrintConnectors\CupsPrintConnector;
 use Mike42\Escpos\PrintConnectors\FilePrintConnector;
+use Mike42\Escpos\PrintConnectors\PrintConnector;
 use Mike42\Escpos\Printer;
 
+const CUPS_PRINTER = 'CT-E351';
 const PRINTER_DEVICE = '/dev/usb/lp0';
 const LOGO_PATH = '/var/www/mobilhotell/assets/UKM Logo Sort RGB.png';
 const LOGO_MAX_WIDTH = 250;
@@ -26,6 +33,49 @@ const RECEIPT_MAX_HEIGHT = 760;
 function usage(): void
 {
     fwrite(STDERR, "Usage: php print_receipt.php --session-id=123\n");
+}
+
+function printer_destination(): string
+{
+    $env = trim((string)getenv('MOBILHOTELL_PRINTER'));
+    return $env !== '' ? $env : CUPS_PRINTER;
+}
+
+function printer_device(): string
+{
+    $env = trim((string)getenv('MOBILHOTELL_PRINTER_DEVICE'));
+    return $env !== '' ? $env : PRINTER_DEVICE;
+}
+
+function raw_device_available(string $path): bool
+{
+    return file_exists($path) && is_writable($path);
+}
+
+function create_print_connector(): PrintConnector
+{
+    $dest = printer_destination();
+    $device = printer_device();
+    if ($dest !== '') {
+        try {
+            return new CupsPrintConnector($dest);
+        } catch (Throwable $e) {
+            if (raw_device_available($device)) {
+                return new FilePrintConnector($device);
+            }
+            throw new RuntimeException(
+                "Unable to use CUPS printer '" . $dest . "': " . $e->getMessage(),
+                0,
+                $e
+            );
+        }
+    }
+
+    if (raw_device_available($device)) {
+        return new FilePrintConnector($device);
+    }
+
+    throw new RuntimeException('No usable printer destination configured');
 }
 
 function parse_session_id(array $argv): ?int
@@ -400,7 +450,7 @@ function main(array $argv): int
             }
             throw new ErrorException($message, 0, $severity);
         }, E_WARNING | E_USER_WARNING | E_NOTICE | E_USER_NOTICE);
-        $connector = new FilePrintConnector(PRINTER_DEVICE);
+        $connector = create_print_connector();
         $printer = new Printer($connector);
         print_receipt($printer, $data);
     } catch (Throwable $e) {

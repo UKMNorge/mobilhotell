@@ -1,0 +1,3 @@
+Unable to print: fopen(/dev/usb/lp0): Failed to open stream: No such file or directory
+Unable to print: preg_split(): Allocation of JIT memory failed, PCRE JIT will be disabled. This is likely caused by security restrictions. Either grant PHP permission to allocate executable memory, or set pcre.jit=0
+Unable to print: preg_split(): Allocation of JIT memory failed, PCRE JIT will be disabled. This is likely caused by security restrictions. Either grant PHP permission to allocate executable memory, or set pcre.jit=0

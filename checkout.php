@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/db.php';
+require __DIR__ . '/usb_status_sync.php';
 
 header('Content-Type: application/json');
 
@@ -54,12 +55,22 @@ $sum = $pdo->prepare("SELECT COALESCE(SUM(strftime('%s', checkout_time) - strfti
 $sum->execute([(int)$session['participant_id']]);
 $seconds = (int)$sum->fetchColumn();
 
-log_event($pdo, 'checkout', 'Telefon utlevert', [
-    'session_id' => (int)$session['id'],
-    'participant_id' => (int)$session['participant_id'],
-    'name' => trim((string)$session['first_name'] . ' ' . (string)$session['last_name']),
-    'screenfree_seconds' => $seconds
-]);
+try {
+    log_event($pdo, 'checkout', 'Telefon utlevert', [
+        'session_id' => (int)$session['id'],
+        'participant_id' => (int)$session['participant_id'],
+        'name' => trim((string)$session['first_name'] . ' ' . (string)$session['last_name']),
+        'screenfree_seconds' => $seconds
+    ]);
+} catch (Throwable) {
+    // Logging must not break checkout completion.
+}
+
+try {
+    usb_status_sync($pdo);
+} catch (Throwable) {
+    // USB sync is best-effort and must not break checkout response.
+}
 
 echo json_encode([
     'success' => true,

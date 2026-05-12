@@ -2,7 +2,7 @@
 
 Mobilhotell er et enkelt kiosk- og adminsystem for innlevering og utlevering av mobiltelefoner under arrangement.
 
-Systemet er bygget for Raspberry Pi/Linux med PHP, SQLite og direkte ESC/POS-utskrift til kvitteringsskriver.
+Systemet er bygget for Linux med PHP, SQLite og direkte ESC/POS-utskrift til kvitteringsskriver.
 
 ## Funksjoner
 
@@ -22,7 +22,7 @@ Systemet er bygget for Raspberry Pi/Linux med PHP, SQLite og direkte ESC/POS-uts
 
 ## Krav
 
-- Linux (testet på Raspberry Pi OS)
+- Linux (desktop)
 - Apache2 med PHP 8.2+ (anbefalt 8.4)
 - PHP-utvidelser:
   - pdo_sqlite
@@ -30,7 +30,7 @@ Systemet er bygget for Raspberry Pi/Linux med PHP, SQLite og direkte ESC/POS-uts
   - mbstring
 - Composer
 - ESC/POS-kompatibel kvitteringsskriver (for eksempel Citizen CT-E351)
-- Skriveren tilgjengelig som /dev/usb/lp0
+- CUPS installert og skriver satt opp som kø (standard: CT-E351)
 
 ## Installasjon
 
@@ -38,7 +38,7 @@ Systemet er bygget for Raspberry Pi/Linux med PHP, SQLite og direkte ESC/POS-uts
 
 ```bash
 sudo apt update
-sudo apt install -y apache2 php php-sqlite3 php-gd php-mbstring composer
+sudo apt install -y apache2 php php-sqlite3 php-gd php-mbstring composer cups cups-client
 ```
 
 ### 2. Plasser prosjektet i webroot
@@ -84,6 +84,17 @@ id www-data
 
 Du skal se lp i gruppelisten.
 
+Hvis kønavnet ikke er CT-E351, sett miljøvariabel for Apache:
+
+```bash
+echo 'SetEnv MOBILHOTELL_PRINTER DITT_KONAVN' | sudo tee /etc/apache2/conf-available/mobilhotell-printer.conf
+sudo a2enconf mobilhotell-printer
+sudo systemctl restart apache2
+```
+
+Valgfritt: Du kan overstyre rå-enhet for fallback med `MOBILHOTELL_PRINTER_DEVICE`
+(standard er `/dev/usb/lp0`). Dette er nyttig for feilsøking/testing.
+
 ### 6. (Valgfritt) Test skriver fra webbruker
 
 ```bash
@@ -94,6 +105,64 @@ sudo -u www-data /usr/bin/php /var/www/mobilhotell/print_receipt.php --session-i
 
 - Kiosk: http://localhost/index.php
 - Admin: http://localhost/admin.php
+
+## Automatisk USB-backup (anbefalt)
+
+Hvis en USB-pinne alltid er montert paa `/mnt/usb`, oppdaterer systemet automatisk
+statusfiler ved hver innlevering og utlevering.
+
+For at webprosessen (`www-data`) skal kunne skrive direkte til USB, maa den mountes
+med gruppe `www-data` og gruppe-skrivetilgang.
+
+Eksempel (engangs remount):
+
+```bash
+sudo umount /mnt/usb
+sudo mount -t exfat -o uid=1000,gid=33,fmask=0002,dmask=0002 /dev/sda1 /mnt/usb
+```
+
+For varig oppsett: legg tilsvarende opsjoner i `/etc/fstab` for USB-disken.
+
+### Ingen cron kreves for plasseringer
+
+`checkin.php` og `checkout.php` oppdaterer disse filene direkte:
+
+- `latest/active-sessions-latest.txt`
+- `latest/active-sessions-latest.csv`
+- `latest/active-sessions-latest.json`
+
+Dette er de viktigste filene hvis systemet gaar ned.
+
+### Valgfritt: sjeldnere databasebackup
+
+Hvis du vil ha databasebackup i tillegg, kan `usb_backup.php` kjores sjeldnere,
+for eksempel hver natt:
+
+```bash
+crontab -l 2>/dev/null | { cat; echo '17 3 * * * /usr/bin/php /var/www/mobilhotell/usb_backup.php >/dev/null 2>&1'; } | crontab -
+```
+
+Merk: denne cron-jobben er valgfri. Plasseringsfilene (`active-sessions-latest.*`)
+oppdateres uten cron ved hver innlevering/utlevering.
+
+### Hvor finner du data ved nedetid?
+
+Backup lagres i:
+
+```text
+/mnt/usb/mobilhotell-backup/
+```
+
+Viktigste filer:
+
+- `latest/active-sessions-latest.txt` (lettleselig oversikt over hvilke mobiler som ligger i hvilke slots)
+- `latest/active-sessions-latest.csv` (samme i CSV)
+- `latest/mobilhotell-latest.sqlite` (siste databasebackup)
+
+Historikk:
+
+- `db/` (tidsstemplede databasekopier)
+- `status/` (tidsstemplede oversikter over aktive innleveringer)
 
 ## Første oppstart
 
@@ -118,7 +187,7 @@ sudo -u www-data /usr/bin/php /var/www/mobilhotell/print_receipt.php --session-i
 1. Sjekk at webbruker har tilgang til skriver:
 
 ```bash
-ls -l /dev/usb/lp0
+lpstat -t
 id www-data
 ```
 

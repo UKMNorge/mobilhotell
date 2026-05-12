@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/db.php';
+require __DIR__ . '/usb_status_sync.php';
 
 header('Content-Type: application/json');
 
@@ -94,22 +95,36 @@ try {
         $printStarted = ($code === 0);
 
         if (!$printStarted) {
-            log_event($pdo, 'print_enqueue_error', 'Klarte ikke starte utskrift', [
-                'session_id' => $sessionId,
-                'cmd' => $cmd,
-                'exit_code' => $code,
-            ]);
+            try {
+                log_event($pdo, 'print_enqueue_error', 'Klarte ikke starte utskrift', [
+                    'session_id' => $sessionId,
+                    'cmd' => $cmd,
+                    'exit_code' => $code,
+                ]);
+            } catch (Throwable) {
+                // Logging must not break the check-in response path.
+            }
         }
     }
 
-    log_event($pdo, 'checkin', 'Telefon innlevert', [
-        'session_id' => $sessionId,
-        'participant_id' => (int)$participant['id'],
-        'qr' => $participant['qr_code'],
-        'slot' => $slot['slot_number'],
-        'type' => $type,
-        'print_started' => $printStarted
-    ]);
+    try {
+        log_event($pdo, 'checkin', 'Telefon innlevert', [
+            'session_id' => $sessionId,
+            'participant_id' => (int)$participant['id'],
+            'qr' => $participant['qr_code'],
+            'slot' => $slot['slot_number'],
+            'type' => $type,
+            'print_started' => $printStarted
+        ]);
+    } catch (Throwable) {
+        // Logging must not break the check-in response path.
+    }
+
+    try {
+        usb_status_sync($pdo);
+    } catch (Throwable) {
+        // USB sync is best-effort and must not break check-in response.
+    }
 
     $checkoutUrl = 'checkout.php?token=' . rawurlencode($token);
 
@@ -131,10 +146,14 @@ try {
 
     $known = ['participant_not_found', 'already_checked_in', 'no_free_slot'];
     $msg = $e->getMessage();
-    log_event($pdo, 'checkin_error', 'Innsjekk feilet', [
-        'qr' => $qr,
-        'type' => $type,
-        'error' => in_array($msg, $known, true) ? $msg : 'server_error'
-    ]);
+    try {
+        log_event($pdo, 'checkin_error', 'Innsjekk feilet', [
+            'qr' => $qr,
+            'type' => $type,
+            'error' => in_array($msg, $known, true) ? $msg : 'server_error'
+        ]);
+    } catch (Throwable) {
+        // Logging must not break the check-in response path.
+    }
     fail(in_array($msg, $known, true) ? $msg : 'server_error');
 }
