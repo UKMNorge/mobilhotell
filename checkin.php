@@ -54,7 +54,7 @@ try {
 
     $token = bin2hex(random_bytes(16));
     $insert = $pdo->prepare("INSERT INTO phone_sessions(participant_id, slot_id, delivery_type, checkin_time, status, session_token)
-        VALUES (?, ?, ?, datetime('now'), 'checked_in', ?)");
+        VALUES (?, ?, ?, " . db_now_expr($pdo) . ", 'checked_in', ?)");
     $insert->execute([(int)$participant['id'], (int)$slot['id'], $type, $token]);
 
     $sessionId = (int)$pdo->lastInsertId();

@@ -141,18 +141,23 @@ ensure_dir($dbDir);
 ensure_dir($statusDir);
 ensure_dir($latestDir);
 
-$dbFile = __DIR__ . '/data/mobilhotell.sqlite';
-if (!is_file($dbFile) || !is_readable($dbFile)) {
-    fail('Databasefil ikke lesbar: ' . $dbFile);
-}
-
 $pdo = db();
-$pdo->exec('PRAGMA wal_checkpoint(FULL)');
+$driver = (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
 $stamp = date('Ymd-His');
-$dbTarget = $dbDir . '/mobilhotell-' . $stamp . '.sqlite';
-if (!copy($dbFile, $dbTarget)) {
-    fail('Kunne ikke kopiere database til USB');
+$dbTarget = null;
+if ($driver === 'sqlite') {
+    $dbFile = __DIR__ . '/data/mobilhotell.sqlite';
+    if (!is_file($dbFile) || !is_readable($dbFile)) {
+        fail('Databasefil ikke lesbar: ' . $dbFile);
+    }
+
+    $pdo->exec('PRAGMA wal_checkpoint(FULL)');
+
+    $dbTarget = $dbDir . '/mobilhotell-' . $stamp . '.sqlite';
+    if (!copy($dbFile, $dbTarget)) {
+        fail('Kunne ikke kopiere database til USB');
+    }
 }
 
 $sessions = fetch_active_sessions($pdo);
@@ -183,7 +188,7 @@ write_atomic(
 write_atomic($statusCsvTarget, as_csv($sessions));
 write_atomic($statusTxtTarget, as_text($sessions));
 
-if (!copy($dbTarget, $latestDir . '/mobilhotell-latest.sqlite')) {
+if ($dbTarget !== null && !copy($dbTarget, $latestDir . '/mobilhotell-latest.sqlite')) {
     fail('Kunne ikke oppdatere latest database backup');
 }
 if (!copy($statusJsonTarget, $latestDir . '/active-sessions-latest.json')) {
@@ -201,7 +206,6 @@ $readme = [
     'Generert: ' . date('Y-m-d H:i:s'),
     '',
     'Viktigste filer:',
-    '- latest/mobilhotell-latest.sqlite',
     '- latest/active-sessions-latest.txt',
     '- latest/active-sessions-latest.csv',
     '- latest/active-sessions-latest.json',
@@ -210,12 +214,22 @@ $readme = [
     'som ligger i hvilke slots akkurat naa.',
     '',
     'Historikk:',
-    '- db/: tidsstemplede database-backuper',
+    '- db/: tidsstemplede database-backuper (kun SQLite)',
     '- status/: tidsstemplede lister over aktive innleveringer',
 ];
+
+if ($dbTarget !== null) {
+    array_splice($readme, 4, 0, '- latest/mobilhotell-latest.sqlite');
+} else {
+    $readme[] = '';
+    $readme[] = 'Merk: aktiv database-driver er ' . $driver . ', saa SQLite-filbackup hoppes over.';
+    $readme[] = 'Bruk database-server backup (f.eks. mysqldump) i tillegg.';
+}
 write_atomic($backupRoot . '/README-RECOVERY.txt', implode("\n", $readme) . "\n");
 
-prune_old($dbDir, 'mobilhotell-', '.sqlite', MAX_DB_BACKUPS);
+if ($dbTarget !== null) {
+    prune_old($dbDir, 'mobilhotell-', '.sqlite', MAX_DB_BACKUPS);
+}
 prune_old($statusDir, 'active-sessions-', '.json', MAX_STATUS_BACKUPS);
 prune_old($statusDir, 'active-sessions-', '.csv', MAX_STATUS_BACKUPS);
 prune_old($statusDir, 'active-sessions-', '.txt', MAX_STATUS_BACKUPS);

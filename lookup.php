@@ -17,11 +17,13 @@ if ($action === 'search') {
     }
 
     $needle = '%' . mb_strtolower($q) . '%';
+    $nameExpr = db_name_concat_expr($pdo, 'first_name', 'last_name');
+    $nameRevExpr = db_name_concat_expr($pdo, 'last_name', 'first_name');
     $stmt = $pdo->prepare("SELECT id, qr_code, first_name, last_name, county, participant_type
         FROM participants
         WHERE lower(qr_code) LIKE ?
-           OR lower(first_name || ' ' || last_name) LIKE ?
-           OR lower(last_name || ' ' || first_name) LIKE ?
+           OR lower(" . $nameExpr . ") LIKE ?
+           OR lower(" . $nameRevExpr . ") LIKE ?
         ORDER BY first_name, last_name
         LIMIT 15");
     $stmt->execute([$needle, $needle, $needle]);
@@ -66,10 +68,13 @@ $activeStmt = $pdo->prepare("SELECT ps.id AS session_id, s.slot_number
 $activeStmt->execute([(int)$p['id']]);
 $active = $activeStmt->fetch();
 
+$checkedOutSecondsExpr = db_unix_ts_expr($pdo, 'checkout_time') . ' - ' . db_unix_ts_expr($pdo, 'checkin_time');
+$checkedInSecondsExpr = db_unix_ts_expr($pdo, db_now_expr($pdo)) . ' - ' . db_unix_ts_expr($pdo, 'checkin_time');
+
 $totalStmt = $pdo->prepare("SELECT COALESCE(SUM(
         CASE
-            WHEN status = 'checked_out' AND checkout_time IS NOT NULL THEN strftime('%s', checkout_time) - strftime('%s', checkin_time)
-            WHEN status = 'checked_in' THEN strftime('%s', datetime('now')) - strftime('%s', checkin_time)
+            WHEN status = 'checked_out' AND checkout_time IS NOT NULL THEN " . $checkedOutSecondsExpr . "
+            WHEN status = 'checked_in' THEN " . $checkedInSecondsExpr . "
             ELSE 0
         END
     ), 0) AS seconds

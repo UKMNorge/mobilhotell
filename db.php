@@ -10,63 +10,180 @@ function db(): PDO
         return $pdo;
     }
 
-    $dataDir = __DIR__ . '/data';
-    if (!is_dir($dataDir)) {
-        mkdir($dataDir, 0775, true);
+    $driver = strtolower(trim((string)getenv('MOBILHOTELL_DB_DRIVER')));
+    if ($driver === '') {
+        $driver = 'sqlite';
     }
 
-    $pdo = new PDO('sqlite:' . $dataDir . '/mobilhotell.sqlite');
+    if ($driver === 'mysql') {
+        $host = trim((string)getenv('MOBILHOTELL_DB_HOST')) ?: '127.0.0.1';
+        $port = (int)(getenv('MOBILHOTELL_DB_PORT') ?: '3306');
+        $dbName = trim((string)getenv('MOBILHOTELL_DB_NAME')) ?: 'mobilhotell';
+        $user = trim((string)getenv('MOBILHOTELL_DB_USER')) ?: 'mobilhotell';
+        $pass = (string)(getenv('MOBILHOTELL_DB_PASS') ?: '');
+        $charset = trim((string)getenv('MOBILHOTELL_DB_CHARSET')) ?: 'utf8mb4';
+
+        $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $host, $port, $dbName, $charset);
+        $pdo = new PDO($dsn, $user, $pass, [
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    } else {
+        $dataDir = __DIR__ . '/data';
+        if (!is_dir($dataDir)) {
+            mkdir($dataDir, 0775, true);
+        }
+
+        $pdo = new PDO('sqlite:' . $dataDir . '/mobilhotell.sqlite');
+    }
+
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
-    // Runtime tuning for concurrent kiosk/admin traffic on constrained hardware.
-    $pdo->exec('PRAGMA journal_mode = WAL');
-    $pdo->exec('PRAGMA synchronous = NORMAL');
-    $pdo->exec('PRAGMA temp_store = MEMORY');
-    $pdo->exec('PRAGMA busy_timeout = 5000');
-    $pdo->exec('PRAGMA foreign_keys = ON');
+    if (db_is_sqlite($pdo)) {
+        // Runtime tuning for concurrent kiosk/admin traffic on constrained hardware.
+        $pdo->exec('PRAGMA journal_mode = WAL');
+        $pdo->exec('PRAGMA synchronous = NORMAL');
+        $pdo->exec('PRAGMA temp_store = MEMORY');
+        $pdo->exec('PRAGMA busy_timeout = 5000');
+        $pdo->exec('PRAGMA foreign_keys = ON');
+    } else {
+        $pdo->exec("SET time_zone = '+00:00'");
+    }
 
     initialize_schema($pdo);
 
     return $pdo;
 }
 
+function db_is_sqlite(PDO $pdo): bool
+{
+    return $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+}
+
+function db_is_mysql(PDO $pdo): bool
+{
+    return $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
+}
+
+function db_now_expr(PDO $pdo): string
+{
+    return db_is_mysql($pdo) ? 'UTC_TIMESTAMP()' : "datetime('now')";
+}
+
+function db_unix_ts_expr(PDO $pdo, string $columnExpr): string
+{
+    return db_is_mysql($pdo) ? 'UNIX_TIMESTAMP(' . $columnExpr . ')' : "strftime('%s', " . $columnExpr . ')';
+}
+
+function db_name_concat_expr(PDO $pdo, string $firstExpr, string $lastExpr): string
+{
+    if (db_is_mysql($pdo)) {
+        return 'CONCAT(' . $firstExpr . ", ' ', " . $lastExpr . ')';
+    }
+
+    return $firstExpr . " || ' ' || " . $lastExpr;
+}
+
+function db_insert_ignore_prefix(PDO $pdo): string
+{
+    return db_is_mysql($pdo) ? 'INSERT IGNORE' : 'INSERT OR IGNORE';
+}
+
+function get_schema_version(PDO $pdo): int
+{
+    if (db_is_sqlite($pdo)) {
+        return (int)$pdo->query('PRAGMA user_version')->fetchColumn();
+    }
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS schema_meta (
+        id TINYINT UNSIGNED PRIMARY KEY,
+        schema_version INT NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $stmt = $pdo->query('SELECT schema_version FROM schema_meta WHERE id = 1');
+    $v = $stmt ? $stmt->fetchColumn() : false;
+    return $v === false ? 0 : (int)$v;
+}
+
+function set_schema_version(PDO $pdo, int $version): void
+{
+    if (db_is_sqlite($pdo)) {
+        $pdo->exec('PRAGMA user_version = ' . $version);
+        return;
+    }
+
+    $stmt = $pdo->prepare('INSERT INTO schema_meta(id, schema_version) VALUES (1, ?) ON DUPLICATE KEY UPDATE schema_version = VALUES(schema_version)');
+    $stmt->execute([$version]);
+}
+
 function initialize_schema(PDO $pdo): void
 {
-    $version = (int)$pdo->query('PRAGMA user_version')->fetchColumn();
+    $version = get_schema_version($pdo);
 
     if ($version < 1) {
         $pdo->beginTransaction();
 
-        $pdo->exec("CREATE TABLE participants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            qr_code TEXT NOT NULL UNIQUE,
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            county TEXT NOT NULL DEFAULT '',
-            participant_type TEXT NOT NULL DEFAULT '',
-            image_path TEXT NOT NULL DEFAULT 'images/default.png'
-        )");
+        if (db_is_mysql($pdo)) {
+            $pdo->exec("CREATE TABLE participants (
+                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                qr_code VARCHAR(191) NOT NULL UNIQUE,
+                first_name VARCHAR(191) NOT NULL,
+                last_name VARCHAR(191) NOT NULL,
+                county VARCHAR(191) NOT NULL DEFAULT '',
+                participant_type VARCHAR(191) NOT NULL DEFAULT '',
+                image_path VARCHAR(255) NOT NULL DEFAULT 'images/default.png'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        $pdo->exec("CREATE TABLE slots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            slot_number TEXT NOT NULL UNIQUE,
-            slot_type TEXT NOT NULL CHECK(slot_type IN ('storage', 'charging')),
-            is_active INTEGER NOT NULL DEFAULT 1
-        )");
+            $pdo->exec("CREATE TABLE slots (
+                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                slot_number VARCHAR(32) NOT NULL UNIQUE,
+                slot_type ENUM('storage', 'charging') NOT NULL,
+                is_active TINYINT(1) NOT NULL DEFAULT 1
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        $pdo->exec("CREATE TABLE phone_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            participant_id INTEGER NOT NULL,
-            slot_id INTEGER NOT NULL,
-            delivery_type TEXT NOT NULL CHECK(delivery_type IN ('storage', 'charging')),
-            checkin_time TEXT NOT NULL DEFAULT (datetime('now')),
-            checkout_time TEXT,
-            status TEXT NOT NULL DEFAULT 'checked_in' CHECK(status IN ('checked_in', 'checked_out')),
-            session_token TEXT UNIQUE,
-            FOREIGN KEY(participant_id) REFERENCES participants(id),
-            FOREIGN KEY(slot_id) REFERENCES slots(id)
-        )");
+            $pdo->exec("CREATE TABLE phone_sessions (
+                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                participant_id INT UNSIGNED NOT NULL,
+                slot_id INT UNSIGNED NOT NULL,
+                delivery_type ENUM('storage', 'charging') NOT NULL,
+                checkin_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                checkout_time DATETIME NULL,
+                status ENUM('checked_in', 'checked_out') NOT NULL DEFAULT 'checked_in',
+                session_token VARCHAR(191) UNIQUE,
+                CONSTRAINT fk_phone_sessions_participant FOREIGN KEY(participant_id) REFERENCES participants(id),
+                CONSTRAINT fk_phone_sessions_slot FOREIGN KEY(slot_id) REFERENCES slots(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        } else {
+            $pdo->exec("CREATE TABLE participants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                qr_code TEXT NOT NULL UNIQUE,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                county TEXT NOT NULL DEFAULT '',
+                participant_type TEXT NOT NULL DEFAULT '',
+                image_path TEXT NOT NULL DEFAULT 'images/default.png'
+            )");
+
+            $pdo->exec("CREATE TABLE slots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slot_number TEXT NOT NULL UNIQUE,
+                slot_type TEXT NOT NULL CHECK(slot_type IN ('storage', 'charging')),
+                is_active INTEGER NOT NULL DEFAULT 1
+            )");
+
+            $pdo->exec("CREATE TABLE phone_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                participant_id INTEGER NOT NULL,
+                slot_id INTEGER NOT NULL,
+                delivery_type TEXT NOT NULL CHECK(delivery_type IN ('storage', 'charging')),
+                checkin_time TEXT NOT NULL DEFAULT (datetime('now')),
+                checkout_time TEXT,
+                status TEXT NOT NULL DEFAULT 'checked_in' CHECK(status IN ('checked_in', 'checked_out')),
+                session_token TEXT UNIQUE,
+                FOREIGN KEY(participant_id) REFERENCES participants(id),
+                FOREIGN KEY(slot_id) REFERENCES slots(id)
+            )");
+        }
 
         $pdo->exec('CREATE INDEX idx_sessions_participant_status ON phone_sessions(participant_id, status)');
         $pdo->exec('CREATE INDEX idx_sessions_slot_status ON phone_sessions(slot_id, status)');
@@ -75,7 +192,7 @@ function initialize_schema(PDO $pdo): void
         seed_slots($pdo);
         seed_demo_participants($pdo);
 
-        $pdo->exec('PRAGMA user_version = 1');
+        set_schema_version($pdo, 1);
         $pdo->commit();
 
         $version = 1;
@@ -83,33 +200,43 @@ function initialize_schema(PDO $pdo): void
 
     if ($version < 2) {
         seed_image_participants($pdo, __DIR__ . '/images');
-        $pdo->exec('PRAGMA user_version = 2');
+        set_schema_version($pdo, 2);
         $version = 2;
     }
 
     if ($version < 3) {
         backfill_participant_images($pdo, __DIR__ . '/images');
-        $pdo->exec('PRAGMA user_version = 3');
+        set_schema_version($pdo, 3);
         $version = 3;
     }
 
     if ($version < 4) {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS event_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type TEXT NOT NULL,
-            message TEXT NOT NULL,
-            metadata_json TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )");
+        if (db_is_mysql($pdo)) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS event_logs (
+                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                event_type VARCHAR(191) NOT NULL,
+                message TEXT NOT NULL,
+                metadata_json LONGTEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        } else {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS event_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                message TEXT NOT NULL,
+                metadata_json TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )");
+        }
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_event_logs_created_at ON event_logs(created_at DESC)');
-        $pdo->exec('PRAGMA user_version = 4');
+        set_schema_version($pdo, 4);
         $version = 4;
     }
 
     if ($version < 5) {
         ensure_slot_capacity($pdo, 'storage', 'S', 180);
         ensure_slot_capacity($pdo, 'charging', 'L', 120);
-        $pdo->exec('PRAGMA user_version = 5');
+        set_schema_version($pdo, 5);
     }
 }
 
@@ -189,7 +316,7 @@ function seed_image_participants(PDO $pdo, string $imagesDir): void
         return;
     }
 
-    $insert = $pdo->prepare('INSERT OR IGNORE INTO participants(qr_code, first_name, last_name, county, participant_type, image_path) VALUES (?, ?, ?, ?, ?, ?)');
+    $insert = $pdo->prepare(db_insert_ignore_prefix($pdo) . ' INTO participants(qr_code, first_name, last_name, county, participant_type, image_path) VALUES (?, ?, ?, ?, ?, ?)');
     $index = 1;
 
     foreach ($paths as $imagePath) {
@@ -250,7 +377,7 @@ function backfill_participant_images(PDO $pdo, string $imagesDir): void
 
 function log_event(PDO $pdo, string $eventType, string $message, array $metadata = []): void
 {
-    $stmt = $pdo->prepare('INSERT INTO event_logs(event_type, message, metadata_json, created_at) VALUES (?, ?, ?, datetime(\'now\'))');
+    $stmt = $pdo->prepare('INSERT INTO event_logs(event_type, message, metadata_json, created_at) VALUES (?, ?, ?, ' . db_now_expr($pdo) . ')');
     $stmt->execute([
         $eventType,
         $message,

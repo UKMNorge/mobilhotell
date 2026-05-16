@@ -105,6 +105,8 @@ function parse_csv_upload(PDO $pdo): array
 if ($action === 'active_list' && $method === 'GET') {
     $q = trim((string)($_GET['q'] ?? ''));
     $needle = '%' . mb_strtolower($q) . '%';
+    $nameExpr = db_name_concat_expr($pdo, 'p.first_name', 'p.last_name');
+    $nameRevExpr = db_name_concat_expr($pdo, 'p.last_name', 'p.first_name');
 
     if ($q === '') {
         $stmt = $pdo->query("SELECT ps.id AS session_id, s.id AS slot_id, s.slot_number, s.slot_type,
@@ -123,8 +125,8 @@ if ($action === 'active_list' && $method === 'GET') {
             WHERE ps.status = 'checked_in'
               AND (
                 lower(p.qr_code) LIKE ?
-                OR lower(p.first_name || ' ' || p.last_name) LIKE ?
-                OR lower(p.last_name || ' ' || p.first_name) LIKE ?
+                                OR lower(" . $nameExpr . ") LIKE ?
+                                OR lower(" . $nameRevExpr . ") LIKE ?
               )
             ORDER BY ps.checkin_time ASC");
         $stmt->execute([$needle, $needle, $needle]);
@@ -201,7 +203,7 @@ if ($action === 'manual_checkout' && $method === 'POST') {
     }
 
     $stmt = $pdo->prepare("UPDATE phone_sessions
-        SET checkout_time = datetime('now'), status = 'checked_out'
+        SET checkout_time = " . db_now_expr($pdo) . ", status = 'checked_out'
         WHERE id = ? AND status = 'checked_in'");
     $stmt->execute([$sessionId]);
 
@@ -331,6 +333,9 @@ if ($action === 'screentime_overview' && $method === 'GET') {
     if ($limit < 1) $limit = 1;
     if ($limit > 2000) $limit = 2000;
 
+    $checkedOutSecondsExpr = db_unix_ts_expr($pdo, 'ps.checkout_time') . ' - ' . db_unix_ts_expr($pdo, 'ps.checkin_time');
+    $checkedInSecondsExpr = db_unix_ts_expr($pdo, db_now_expr($pdo)) . ' - ' . db_unix_ts_expr($pdo, 'ps.checkin_time');
+
     $stmt = $pdo->prepare("SELECT
         p.id,
         p.qr_code,
@@ -340,8 +345,8 @@ if ($action === 'screentime_overview' && $method === 'GET') {
         p.participant_type,
         COALESCE(SUM(
             CASE
-                WHEN ps.status = 'checked_out' AND ps.checkout_time IS NOT NULL THEN strftime('%s', ps.checkout_time) - strftime('%s', ps.checkin_time)
-                WHEN ps.status = 'checked_in' THEN strftime('%s', datetime('now')) - strftime('%s', ps.checkin_time)
+                WHEN ps.status = 'checked_out' AND ps.checkout_time IS NOT NULL THEN " . $checkedOutSecondsExpr . "
+                WHEN ps.status = 'checked_in' THEN " . $checkedInSecondsExpr . "
                 ELSE 0
             END
         ), 0) AS screenfree_seconds,
