@@ -39,7 +39,7 @@ if (!$session) {
 }
 
 $update = $pdo->prepare("UPDATE phone_sessions
-    SET checkout_time = datetime('now'), status = 'checked_out'
+    SET checkout_time = NOW(), status = 'checked_out'
     WHERE id = ? AND status = 'checked_in'");
 $update->execute([(int)$session['id']]);
 
@@ -48,7 +48,7 @@ if ($update->rowCount() <= 0) {
     exit;
 }
 
-$sum = $pdo->prepare("SELECT COALESCE(SUM(strftime('%s', checkout_time) - strftime('%s', checkin_time)), 0) AS seconds
+$sum = $pdo->prepare("SELECT COALESCE(SUM(TIMESTAMPDIFF(SECOND, checkin_time, checkout_time)), 0) AS seconds
     FROM phone_sessions
     WHERE participant_id = ?
       AND checkout_time IS NOT NULL");

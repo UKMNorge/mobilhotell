@@ -2,7 +2,7 @@
 
 Mobilhotell er et enkelt kiosk- og adminsystem for innlevering og utlevering av mobiltelefoner under arrangement.
 
-Systemet er bygget for Linux med PHP, SQLite og direkte ESC/POS-utskrift til kvitteringsskriver.
+Systemet er bygget for Linux med PHP, MySQL/MariaDB og direkte ESC/POS-utskrift til kvitteringsskriver.
 
 ## Funksjoner
 
@@ -11,13 +11,13 @@ Systemet er bygget for Linux med PHP, SQLite og direkte ESC/POS-utskrift til kvi
 - Utlevering via token og adminfunksjoner
 - Adminpanel for drift, aktive innleveringer, skjermtid og slots
 - Kvitteringsutskrift med logo og QR-kode via ESC/POS
-- Lokal SQLite-database med migrering ved oppstart
+- Felles MySQL/MariaDB-database med migrering ved oppstart
 
 ## Teknisk oversikt
 
-- Backend: PHP (PDO + SQLite)
+- Backend: PHP (PDO + MySQL)
 - Frontend: Vanlig HTML/CSS/JavaScript
-- Database: SQLite-fil i data/mobilhotell.sqlite
+- Database: MySQL/MariaDB (anbefalt: MariaDB 10.6+)
 - Utskrift: print_receipt.php + mike42/escpos-php
 
 ## Krav
@@ -25,7 +25,7 @@ Systemet er bygget for Linux med PHP, SQLite og direkte ESC/POS-utskrift til kvi
 - Linux (desktop)
 - Apache2 med PHP 8.2+ (anbefalt 8.4)
 - PHP-utvidelser:
-  - pdo_sqlite
+  - pdo_mysql
   - gd
   - mbstring
 - Composer
@@ -38,7 +38,15 @@ Systemet er bygget for Linux med PHP, SQLite og direkte ESC/POS-utskrift til kvi
 
 ```bash
 sudo apt update
-sudo apt install -y apache2 php php-sqlite3 php-gd php-mbstring composer cups cups-client
+sudo apt install -y apache2 mariadb-server php php-mysql php-gd php-mbstring composer cups cups-client
+```
+
+### 1b. Opprett database og bruker (paa hovedserver)
+
+```bash
+sudo mysql -e "CREATE DATABASE IF NOT EXISTS mobilhotell CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+sudo mysql -e "CREATE USER IF NOT EXISTS 'mobilhotell'@'localhost' IDENTIFIED BY 'BYTT_TIL_STERKT_PASSORD';"
+sudo mysql -e "GRANT ALL PRIVILEGES ON mobilhotell.* TO 'mobilhotell'@'localhost'; FLUSH PRIVILEGES;"
 ```
 
 ### 2. Plasser prosjektet i webroot
@@ -67,6 +75,21 @@ Hvis vendor-mappen ikke finnes i repoet, er dette obligatorisk.
 mkdir -p data
 sudo chown -R www-data:www-data data
 sudo chmod -R 775 data
+```
+
+### 4b. Sett database-miljo for Apache
+
+```bash
+sudo tee /etc/apache2/conf-available/mobilhotell-db.conf >/dev/null <<'EOF'
+SetEnv MOBILHOTELL_DB_HOST 127.0.0.1
+SetEnv MOBILHOTELL_DB_PORT 3306
+SetEnv MOBILHOTELL_DB_NAME mobilhotell
+SetEnv MOBILHOTELL_DB_USER mobilhotell
+SetEnv MOBILHOTELL_DB_PASS BYTT_TIL_STERKT_PASSORD
+EOF
+
+sudo a2enconf mobilhotell-db
+sudo systemctl restart apache2
 ```
 
 ### 5. Gi webbruker tilgang til kvitteringsskriver
@@ -157,7 +180,7 @@ Viktigste filer:
 
 - `latest/active-sessions-latest.txt` (lettleselig oversikt over hvilke mobiler som ligger i hvilke slots)
 - `latest/active-sessions-latest.csv` (samme i CSV)
-- `latest/mobilhotell-latest.sqlite` (siste databasebackup)
+- `latest/mobilhotell-latest.sql` (siste databasebackup)
 
 Historikk:
 
@@ -166,9 +189,68 @@ Historikk:
 
 ## Første oppstart
 
-- Databasen opprettes automatisk ved første kall til appen.
+- Databasen/tabeller opprettes automatisk ved første kall til appen.
 - Tabeller og migreringer håndteres i db.php.
 - Demo/testdata kan ligge i eksisterende database avhengig av miljø.
+
+## To Linux-PC-er med felles database (samtidig skanning)
+
+Anbefalt oppsett:
+
+- Hoved-PC (server): Apache + app + MySQL/MariaDB
+- Klient-PC: Apache + app (samme kode), men kobler til DB paa hoved-PC
+
+### 1. Nettverk mellom maskinene
+
+Gi faste IP-er, for eksempel:
+
+- Hoved-PC: `10.10.10.1/24`
+- Klient-PC: `10.10.10.2/24`
+
+Test:
+
+```bash
+ping -c 3 10.10.10.1
+ping -c 3 10.10.10.2
+```
+
+### 2. Tillat DB-tilgang fra klient-PC (paa hoved-PC)
+
+```bash
+sudo mysql -e "CREATE USER IF NOT EXISTS 'mobilhotell'@'10.10.10.2' IDENTIFIED BY 'BYTT_TIL_STERKT_PASSORD';"
+sudo mysql -e "GRANT ALL PRIVILEGES ON mobilhotell.* TO 'mobilhotell'@'10.10.10.2'; FLUSH PRIVILEGES;"
+```
+
+Hvis MariaDB bare lytter lokalt, sett bind-adresse (filplassering varierer med distro):
+
+```bash
+sudo grep -R "bind-address" /etc/mysql /etc/my.cnf.d 2>/dev/null
+```
+
+Sett til hoved-PC sin IP eller `0.0.0.0`, restart deretter DB-tjenesten.
+
+### 3. Pek klient-PC mot hoved-PC-databasen
+
+Opprett samme Apache-konfig paa klient-PC, men med hoved-PC som host:
+
+```bash
+sudo tee /etc/apache2/conf-available/mobilhotell-db.conf >/dev/null <<'EOF'
+SetEnv MOBILHOTELL_DB_HOST 10.10.10.1
+SetEnv MOBILHOTELL_DB_PORT 3306
+SetEnv MOBILHOTELL_DB_NAME mobilhotell
+SetEnv MOBILHOTELL_DB_USER mobilhotell
+SetEnv MOBILHOTELL_DB_PASS BYTT_TIL_STERKT_PASSORD
+EOF
+
+sudo a2enconf mobilhotell-db
+sudo systemctl restart apache2
+```
+
+### 4. Verifiser samtidig innsjekk
+
+- Aapne kiosk paa begge maskiner
+- Skann to ulike ID-kort samtidig
+- Bekreft at begge innsjekk lagres og at samme slot ikke blir dobbeltbooket
 
 ## Viktige filer
 

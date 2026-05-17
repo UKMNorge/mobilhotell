@@ -141,18 +141,14 @@ ensure_dir($dbDir);
 ensure_dir($statusDir);
 ensure_dir($latestDir);
 
-$dbFile = __DIR__ . '/data/mobilhotell.sqlite';
-if (!is_file($dbFile) || !is_readable($dbFile)) {
-    fail('Databasefil ikke lesbar: ' . $dbFile);
-}
-
 $pdo = db();
-$pdo->exec('PRAGMA wal_checkpoint(FULL)');
 
 $stamp = date('Ymd-His');
-$dbTarget = $dbDir . '/mobilhotell-' . $stamp . '.sqlite';
-if (!copy($dbFile, $dbTarget)) {
-    fail('Kunne ikke kopiere database til USB');
+$dbTarget = $dbDir . '/mobilhotell-' . $stamp . '.sql';
+try {
+    dump_database_to_path($dbTarget);
+} catch (Throwable $e) {
+    fail('Kunne ikke dumpe database til USB: ' . $e->getMessage());
 }
 
 $sessions = fetch_active_sessions($pdo);
@@ -183,7 +179,7 @@ write_atomic(
 write_atomic($statusCsvTarget, as_csv($sessions));
 write_atomic($statusTxtTarget, as_text($sessions));
 
-if (!copy($dbTarget, $latestDir . '/mobilhotell-latest.sqlite')) {
+if (!copy($dbTarget, $latestDir . '/mobilhotell-latest.sql')) {
     fail('Kunne ikke oppdatere latest database backup');
 }
 if (!copy($statusJsonTarget, $latestDir . '/active-sessions-latest.json')) {
@@ -201,7 +197,7 @@ $readme = [
     'Generert: ' . date('Y-m-d H:i:s'),
     '',
     'Viktigste filer:',
-    '- latest/mobilhotell-latest.sqlite',
+    '- latest/mobilhotell-latest.sql',
     '- latest/active-sessions-latest.txt',
     '- latest/active-sessions-latest.csv',
     '- latest/active-sessions-latest.json',
@@ -215,7 +211,7 @@ $readme = [
 ];
 write_atomic($backupRoot . '/README-RECOVERY.txt', implode("\n", $readme) . "\n");
 
-prune_old($dbDir, 'mobilhotell-', '.sqlite', MAX_DB_BACKUPS);
+prune_old($dbDir, 'mobilhotell-', '.sql', MAX_DB_BACKUPS);
 prune_old($statusDir, 'active-sessions-', '.json', MAX_STATUS_BACKUPS);
 prune_old($statusDir, 'active-sessions-', '.csv', MAX_STATUS_BACKUPS);
 prune_old($statusDir, 'active-sessions-', '.txt', MAX_STATUS_BACKUPS);

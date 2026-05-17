@@ -10,72 +10,223 @@ function db(): PDO
         return $pdo;
     }
 
-    $dataDir = __DIR__ . '/data';
-    if (!is_dir($dataDir)) {
-        mkdir($dataDir, 0775, true);
-    }
+    $cfg = db_config();
+    $dsn = sprintf(
+        'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+        $cfg['host'],
+        $cfg['port'],
+        $cfg['name'],
+        $cfg['charset']
+    );
 
-    $pdo = new PDO('sqlite:' . $dataDir . '/mobilhotell.sqlite');
+    $pdo = new PDO($dsn, $cfg['user'], $cfg['pass']);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
-    // Runtime tuning for concurrent kiosk/admin traffic on constrained hardware.
-    $pdo->exec('PRAGMA journal_mode = WAL');
-    $pdo->exec('PRAGMA synchronous = NORMAL');
-    $pdo->exec('PRAGMA temp_store = MEMORY');
-    $pdo->exec('PRAGMA busy_timeout = 5000');
-    $pdo->exec('PRAGMA foreign_keys = ON');
+    // Fail fast on lock waits during concurrent check-in bursts.
+    $pdo->exec('SET SESSION innodb_lock_wait_timeout = 8');
 
     initialize_schema($pdo);
 
     return $pdo;
 }
 
+function db_config(): array
+{
+    $apacheSetEnv = [];
+    if (PHP_SAPI === 'cli') {
+        $apacheSetEnv = apache_setenv_config();
+    }
+
+    $host = getenv('MOBILHOTELL_DB_HOST') ?: ($apacheSetEnv['MOBILHOTELL_DB_HOST'] ?? '127.0.0.1');
+    $port = (int)(getenv('MOBILHOTELL_DB_PORT') ?: ($apacheSetEnv['MOBILHOTELL_DB_PORT'] ?? '3306'));
+    $name = getenv('MOBILHOTELL_DB_NAME') ?: ($apacheSetEnv['MOBILHOTELL_DB_NAME'] ?? 'mobilhotell');
+    $user = getenv('MOBILHOTELL_DB_USER') ?: ($apacheSetEnv['MOBILHOTELL_DB_USER'] ?? 'mobilhotell');
+    $pass = getenv('MOBILHOTELL_DB_PASS');
+    if ($pass === false || $pass === '') {
+        $pass = $apacheSetEnv['MOBILHOTELL_DB_PASS'] ?? '';
+    }
+
+    return [
+        'host' => $host,
+        'port' => $port,
+        'name' => $name,
+        'user' => $user,
+        'pass' => $pass,
+        'charset' => 'utf8mb4',
+    ];
+}
+
+function apache_setenv_config(): array
+{
+    $paths = [
+        '/etc/apache2/conf-enabled/mobilhotell-db.conf',
+        '/etc/apache2/conf-available/mobilhotell-db.conf',
+    ];
+
+    foreach ($paths as $path) {
+        if (!is_readable($path)) {
+            continue;
+        }
+
+        $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!is_array($lines)) {
+            continue;
+        }
+
+        $cfg = [];
+        foreach ($lines as $line) {
+            if (preg_match('/^\s*SetEnv\s+([A-Z0-9_]+)\s+(.*)$/', $line, $m) !== 1) {
+                continue;
+            }
+
+            $key = $m[1];
+            $value = trim($m[2]);
+            if (strlen($value) >= 2) {
+                $first = $value[0];
+                $last = $value[strlen($value) - 1];
+                if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+                    $value = substr($value, 1, -1);
+                }
+            }
+            $cfg[$key] = $value;
+        }
+
+        if ($cfg !== []) {
+            return $cfg;
+        }
+    }
+
+    return [];
+}
+
+function db_dump_command(): string
+{
+    return getenv('MOBILHOTELL_DB_DUMP_CMD') ?: '/usr/bin/mysqldump';
+}
+
+function dump_database_to_path(string $targetPath): void
+{
+    $cfg = db_config();
+    $dumpBin = db_dump_command();
+
+    $cmd = sprintf(
+        '%s --single-transaction --quick --skip-lock-tables --default-character-set=%s --host=%s --port=%d --user=%s %s',
+        escapeshellcmd($dumpBin),
+        escapeshellarg($cfg['charset']),
+        escapeshellarg($cfg['host']),
+        $cfg['port'],
+        escapeshellarg($cfg['user']),
+        escapeshellarg($cfg['name'])
+    );
+
+    $env = $_ENV;
+    if ($cfg['pass'] !== '') {
+        $env['MYSQL_PWD'] = $cfg['pass'];
+    }
+
+    $errPipe = null;
+    $process = proc_open(
+        $cmd,
+        [
+            1 => ['file', $targetPath, 'w'],
+            2 => ['pipe', 'w'],
+        ],
+        $pipes,
+        __DIR__,
+        $env
+    );
+
+    if (!is_resource($process)) {
+        throw new RuntimeException('Kunne ikke starte mysqldump');
+    }
+
+    if (isset($pipes[2]) && is_resource($pipes[2])) {
+        $errPipe = $pipes[2];
+    }
+
+    $stderr = '';
+    if (is_resource($errPipe)) {
+        $stderr = (string)stream_get_contents($errPipe);
+        fclose($errPipe);
+    }
+
+    $exitCode = proc_close($process);
+    if ($exitCode !== 0) {
+        @unlink($targetPath);
+        throw new RuntimeException('mysqldump feilet: ' . trim($stderr));
+    }
+}
+
 function initialize_schema(PDO $pdo): void
 {
-    $version = (int)$pdo->query('PRAGMA user_version')->fetchColumn();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INT NOT NULL PRIMARY KEY,
+        applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $version = schema_version($pdo);
 
     if ($version < 1) {
         $pdo->beginTransaction();
 
         $pdo->exec("CREATE TABLE participants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            qr_code TEXT NOT NULL UNIQUE,
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            county TEXT NOT NULL DEFAULT '',
-            participant_type TEXT NOT NULL DEFAULT '',
-            image_path TEXT NOT NULL DEFAULT 'images/default.png'
-        )");
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            qr_code VARCHAR(191) NOT NULL,
+            first_name VARCHAR(191) NOT NULL,
+            last_name VARCHAR(191) NOT NULL,
+            county VARCHAR(191) NOT NULL DEFAULT '',
+            participant_type VARCHAR(191) NOT NULL DEFAULT '',
+            image_path VARCHAR(255) NOT NULL DEFAULT 'images/default.png',
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_participants_qr_code (qr_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         $pdo->exec("CREATE TABLE slots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            slot_number TEXT NOT NULL UNIQUE,
-            slot_type TEXT NOT NULL CHECK(slot_type IN ('storage', 'charging')),
-            is_active INTEGER NOT NULL DEFAULT 1
-        )");
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            slot_number VARCHAR(32) NOT NULL,
+            slot_type ENUM('storage', 'charging') NOT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_slots_slot_number (slot_number)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         $pdo->exec("CREATE TABLE phone_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            participant_id INTEGER NOT NULL,
-            slot_id INTEGER NOT NULL,
-            delivery_type TEXT NOT NULL CHECK(delivery_type IN ('storage', 'charging')),
-            checkin_time TEXT NOT NULL DEFAULT (datetime('now')),
-            checkout_time TEXT,
-            status TEXT NOT NULL DEFAULT 'checked_in' CHECK(status IN ('checked_in', 'checked_out')),
-            session_token TEXT UNIQUE,
-            FOREIGN KEY(participant_id) REFERENCES participants(id),
-            FOREIGN KEY(slot_id) REFERENCES slots(id)
-        )");
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            participant_id INT UNSIGNED NOT NULL,
+            slot_id INT UNSIGNED NOT NULL,
+            delivery_type ENUM('storage', 'charging') NOT NULL,
+            checkin_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            checkout_time DATETIME NULL,
+            status ENUM('checked_in', 'checked_out') NOT NULL DEFAULT 'checked_in',
+            session_token VARCHAR(64) NULL,
+            active_slot_id INT UNSIGNED GENERATED ALWAYS AS (CASE WHEN status = 'checked_in' THEN slot_id ELSE NULL END) STORED,
+            active_participant_id INT UNSIGNED GENERATED ALWAYS AS (CASE WHEN status = 'checked_in' THEN participant_id ELSE NULL END) STORED,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_phone_sessions_session_token (session_token),
+            UNIQUE KEY uq_phone_sessions_active_slot (active_slot_id),
+            UNIQUE KEY uq_phone_sessions_active_participant (active_participant_id),
+            KEY idx_sessions_participant_status (participant_id, status),
+            KEY idx_sessions_slot_status (slot_id, status),
+            KEY idx_sessions_status_checkin (status, checkin_time),
+            CONSTRAINT fk_phone_sessions_participant FOREIGN KEY (participant_id) REFERENCES participants(id),
+            CONSTRAINT fk_phone_sessions_slot FOREIGN KEY (slot_id) REFERENCES slots(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-        $pdo->exec('CREATE INDEX idx_sessions_participant_status ON phone_sessions(participant_id, status)');
-        $pdo->exec('CREATE INDEX idx_sessions_slot_status ON phone_sessions(slot_id, status)');
-        $pdo->exec('CREATE INDEX idx_sessions_status_checkin ON phone_sessions(status, checkin_time)');
+        $pdo->exec("CREATE TABLE event_logs (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            event_type VARCHAR(80) NOT NULL,
+            message VARCHAR(255) NOT NULL,
+            metadata_json JSON NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_event_logs_created_at (created_at DESC)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         seed_slots($pdo);
         seed_demo_participants($pdo);
 
-        $pdo->exec('PRAGMA user_version = 1');
+        mark_schema_version($pdo, 1);
         $pdo->commit();
 
         $version = 1;
@@ -83,34 +234,47 @@ function initialize_schema(PDO $pdo): void
 
     if ($version < 2) {
         seed_image_participants($pdo, __DIR__ . '/images');
-        $pdo->exec('PRAGMA user_version = 2');
+        mark_schema_version($pdo, 2);
         $version = 2;
     }
 
     if ($version < 3) {
         backfill_participant_images($pdo, __DIR__ . '/images');
-        $pdo->exec('PRAGMA user_version = 3');
+        mark_schema_version($pdo, 3);
         $version = 3;
     }
 
     if ($version < 4) {
         $pdo->exec("CREATE TABLE IF NOT EXISTS event_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type TEXT NOT NULL,
-            message TEXT NOT NULL,
-            metadata_json TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_event_logs_created_at ON event_logs(created_at DESC)');
-        $pdo->exec('PRAGMA user_version = 4');
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            event_type VARCHAR(80) NOT NULL,
+            message VARCHAR(255) NOT NULL,
+            metadata_json JSON NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_event_logs_created_at (created_at DESC)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        mark_schema_version($pdo, 4);
         $version = 4;
     }
 
     if ($version < 5) {
         ensure_slot_capacity($pdo, 'storage', 'S', 180);
         ensure_slot_capacity($pdo, 'charging', 'L', 120);
-        $pdo->exec('PRAGMA user_version = 5');
+        mark_schema_version($pdo, 5);
     }
+}
+
+function schema_version(PDO $pdo): int
+{
+    $value = $pdo->query('SELECT COALESCE(MAX(version), 0) FROM schema_migrations')->fetchColumn();
+    return (int)$value;
+}
+
+function mark_schema_version(PDO $pdo, int $version): void
+{
+    $stmt = $pdo->prepare('INSERT IGNORE INTO schema_migrations(version) VALUES (?)');
+    $stmt->execute([$version]);
 }
 
 function ensure_slot_capacity(PDO $pdo, string $slotType, string $prefix, int $targetCount): void
@@ -189,7 +353,7 @@ function seed_image_participants(PDO $pdo, string $imagesDir): void
         return;
     }
 
-    $insert = $pdo->prepare('INSERT OR IGNORE INTO participants(qr_code, first_name, last_name, county, participant_type, image_path) VALUES (?, ?, ?, ?, ?, ?)');
+    $insert = $pdo->prepare('INSERT IGNORE INTO participants(qr_code, first_name, last_name, county, participant_type, image_path) VALUES (?, ?, ?, ?, ?, ?)');
     $index = 1;
 
     foreach ($paths as $imagePath) {
@@ -250,7 +414,7 @@ function backfill_participant_images(PDO $pdo, string $imagesDir): void
 
 function log_event(PDO $pdo, string $eventType, string $message, array $metadata = []): void
 {
-    $stmt = $pdo->prepare('INSERT INTO event_logs(event_type, message, metadata_json, created_at) VALUES (?, ?, ?, datetime(\'now\'))');
+    $stmt = $pdo->prepare('INSERT INTO event_logs(event_type, message, metadata_json, created_at) VALUES (?, ?, ?, NOW())');
     $stmt->execute([
         $eventType,
         $message,

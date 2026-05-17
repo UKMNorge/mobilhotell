@@ -1,3 +1,7 @@
-Unable to print: fopen(/dev/usb/lp0): Failed to open stream: No such file or directory
-Unable to print: preg_split(): Allocation of JIT memory failed, PCRE JIT will be disabled. This is likely caused by security restrictions. Either grant PHP permission to allocate executable memory, or set pcre.jit=0
-Unable to print: preg_split(): Allocation of JIT memory failed, PCRE JIT will be disabled. This is likely caused by security restrictions. Either grant PHP permission to allocate executable memory, or set pcre.jit=0
+PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [1045] Access denied for user 'mobilhotell'@'localhost' (using password: NO) in /var/www/mobilhotell/db.php:22
+Stack trace:
+#0 /var/www/mobilhotell/db.php(22): PDO->__construct()
+#1 /var/www/mobilhotell/print_receipt.php(437): db()
+#2 /var/www/mobilhotell/print_receipt.php(472): main()
+#3 {main}
+  thrown in /var/www/mobilhotell/db.php on line 22

@@ -123,8 +123,8 @@ if ($action === 'active_list' && $method === 'GET') {
             WHERE ps.status = 'checked_in'
               AND (
                 lower(p.qr_code) LIKE ?
-                OR lower(p.first_name || ' ' || p.last_name) LIKE ?
-                OR lower(p.last_name || ' ' || p.first_name) LIKE ?
+                                OR lower(CONCAT(p.first_name, ' ', p.last_name)) LIKE ?
+                                OR lower(CONCAT(p.last_name, ' ', p.first_name)) LIKE ?
               )
             ORDER BY ps.checkin_time ASC");
         $stmt->execute([$needle, $needle, $needle]);
@@ -201,7 +201,7 @@ if ($action === 'manual_checkout' && $method === 'POST') {
     }
 
     $stmt = $pdo->prepare("UPDATE phone_sessions
-        SET checkout_time = datetime('now'), status = 'checked_out'
+        SET checkout_time = NOW(), status = 'checked_out'
         WHERE id = ? AND status = 'checked_in'");
     $stmt->execute([$sessionId]);
 
@@ -340,8 +340,8 @@ if ($action === 'screentime_overview' && $method === 'GET') {
         p.participant_type,
         COALESCE(SUM(
             CASE
-                WHEN ps.status = 'checked_out' AND ps.checkout_time IS NOT NULL THEN strftime('%s', ps.checkout_time) - strftime('%s', ps.checkin_time)
-                WHEN ps.status = 'checked_in' THEN strftime('%s', datetime('now')) - strftime('%s', ps.checkin_time)
+                WHEN ps.status = 'checked_out' AND ps.checkout_time IS NOT NULL THEN TIMESTAMPDIFF(SECOND, ps.checkin_time, ps.checkout_time)
+                WHEN ps.status = 'checked_in' THEN TIMESTAMPDIFF(SECOND, ps.checkin_time, NOW())
                 ELSE 0
             END
         ), 0) AS screenfree_seconds,

@@ -20,8 +20,8 @@ if ($action === 'search') {
     $stmt = $pdo->prepare("SELECT id, qr_code, first_name, last_name, county, participant_type
         FROM participants
         WHERE lower(qr_code) LIKE ?
-           OR lower(first_name || ' ' || last_name) LIKE ?
-           OR lower(last_name || ' ' || first_name) LIKE ?
+              OR lower(CONCAT(first_name, ' ', last_name)) LIKE ?
+              OR lower(CONCAT(last_name, ' ', first_name)) LIKE ?
         ORDER BY first_name, last_name
         LIMIT 15");
     $stmt->execute([$needle, $needle, $needle]);
@@ -68,8 +68,8 @@ $active = $activeStmt->fetch();
 
 $totalStmt = $pdo->prepare("SELECT COALESCE(SUM(
         CASE
-            WHEN status = 'checked_out' AND checkout_time IS NOT NULL THEN strftime('%s', checkout_time) - strftime('%s', checkin_time)
-            WHEN status = 'checked_in' THEN strftime('%s', datetime('now')) - strftime('%s', checkin_time)
+            WHEN status = 'checked_out' AND checkout_time IS NOT NULL THEN TIMESTAMPDIFF(SECOND, checkin_time, checkout_time)
+            WHEN status = 'checked_in' THEN TIMESTAMPDIFF(SECOND, checkin_time, NOW())
             ELSE 0
         END
     ), 0) AS seconds

@@ -1,4 +1,4 @@
--- SQLite admin/drift helper queries
+-- MySQL/MariaDB admin/drift helper queries
 
 -- Aktive innleveringer
 SELECT
@@ -6,7 +6,7 @@ SELECT
   s.slot_number,
   s.slot_type,
   p.qr_code,
-  p.first_name || ' ' || p.last_name AS name,
+  CONCAT(p.first_name, ' ', p.last_name) AS name,
   ps.checkin_time
 FROM phone_sessions ps
 JOIN participants p ON p.id = ps.participant_id
@@ -22,7 +22,7 @@ SELECT
   s.is_active,
   ps.id AS session_id,
   p.qr_code,
-  p.first_name || ' ' || p.last_name AS name,
+  CONCAT(p.first_name, ' ', p.last_name) AS name,
   CASE
     WHEN s.is_active <> 1 THEN 'disabled'
     WHEN ps.id IS NOT NULL THEN 'busy'
@@ -37,8 +37,8 @@ ORDER BY s.slot_number ASC;
 SELECT
   p.id,
   p.qr_code,
-  p.first_name || ' ' || p.last_name AS name,
-  COALESCE(SUM(strftime('%s', ps.checkout_time) - strftime('%s', ps.checkin_time)), 0) AS screenfree_seconds
+  CONCAT(p.first_name, ' ', p.last_name) AS name,
+  COALESCE(SUM(TIMESTAMPDIFF(SECOND, ps.checkin_time, ps.checkout_time)), 0) AS screenfree_seconds
 FROM participants p
 LEFT JOIN phone_sessions ps ON ps.participant_id = p.id AND ps.checkout_time IS NOT NULL
 GROUP BY p.id

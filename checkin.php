@@ -37,15 +37,15 @@ try {
         throw new RuntimeException('already_checked_in');
     }
 
-    $slotStmt = $pdo->prepare("SELECT s.id, s.slot_number
-        FROM slots s
-        WHERE s.slot_type = ?
-          AND s.is_active = 1
-          AND NOT EXISTS (
-            SELECT 1 FROM phone_sessions ps WHERE ps.slot_id = s.id AND ps.status = 'checked_in'
-          )
-        ORDER BY s.slot_number
-        LIMIT 1");
+        $slotStmt = $pdo->prepare("SELECT s.id, s.slot_number
+                FROM slots s
+                LEFT JOIN phone_sessions ps ON ps.slot_id = s.id AND ps.status = 'checked_in'
+                WHERE s.slot_type = ?
+                    AND s.is_active = 1
+                    AND ps.id IS NULL
+                ORDER BY s.slot_number
+                LIMIT 1
+                FOR UPDATE");
     $slotStmt->execute([$type]);
     $slot = $slotStmt->fetch();
     if (!$slot) {
@@ -54,7 +54,7 @@ try {
 
     $token = bin2hex(random_bytes(16));
     $insert = $pdo->prepare("INSERT INTO phone_sessions(participant_id, slot_id, delivery_type, checkin_time, status, session_token)
-        VALUES (?, ?, ?, datetime('now'), 'checked_in', ?)");
+        VALUES (?, ?, ?, NOW(), 'checked_in', ?)");
     $insert->execute([(int)$participant['id'], (int)$slot['id'], $type, $token]);
 
     $sessionId = (int)$pdo->lastInsertId();
@@ -146,6 +146,9 @@ try {
 
     $known = ['participant_not_found', 'already_checked_in', 'no_free_slot'];
     $msg = $e->getMessage();
+    if ($e instanceof PDOException && $e->getCode() === '23000') {
+        $msg = 'already_checked_in';
+    }
     try {
         log_event($pdo, 'checkin_error', 'Innsjekk feilet', [
             'qr' => $qr,
