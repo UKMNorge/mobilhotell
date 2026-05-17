@@ -35,7 +35,7 @@ h1 {
 }
 .top-tools {
   display: grid;
-  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
   position: sticky;
@@ -570,6 +570,7 @@ body.showing-card .avatar {
     <button id="btnFocus" class="chip">Reaktiver scanner</button>
     <button id="btnReset" class="chip">Tøm skjerm</button>
     <span id="netState" class="chip">Online</span>
+    <span id="nodeRole" class="chip">Rolle: -</span>
   </div>
 
   <section id="adminPanel" class="admin-panel">
@@ -608,6 +609,7 @@ body.showing-card .avatar {
   const btnReset = document.getElementById('btnReset');
   const btnClearSearch = document.getElementById('btnClearSearch');
   const netState = document.getElementById('netState');
+  const nodeRole = document.getElementById('nodeRole');
   const adminPanel = document.getElementById('adminPanel');
   const capacityGrid = document.getElementById('capacityGrid');
   const osk = document.getElementById('osk');
@@ -737,6 +739,17 @@ body.showing-card .avatar {
     }
   }
 
+  async function loadNodeRole() {
+    try {
+      const data = await json('admin_api.php?action=health');
+      const s = data.summary || {};
+      const role = s.node_role === 'klient' ? 'Klient' : 'Hoved';
+      nodeRole.textContent = 'Rolle: ' + role;
+    } catch {
+      nodeRole.textContent = 'Rolle: -';
+    }
+  }
+
   function scheduleReset() {
     if (resetTimer) clearTimeout(resetTimer);
     resetTimer = setTimeout(() => {
@@ -744,6 +757,7 @@ body.showing-card .avatar {
       document.body.classList.remove('showing-card');
       hideKeyboard();
       loadCapacity();
+      loadNodeRole();
     }, 12000);
   }
 
@@ -1052,7 +1066,9 @@ body.showing-card .avatar {
   window.addEventListener('resize', fitReceiptToViewport);
   updateNetState();
   loadCapacity();
+  loadNodeRole();
   setInterval(loadCapacity, 15000);
+  setInterval(loadNodeRole, 30000);
 
   createKeyboard();
 

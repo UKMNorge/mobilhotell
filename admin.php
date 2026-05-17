@@ -171,6 +171,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
         <option value="name_asc">Navn A-Å</option>
       </select>
       <label><input id="screentimeOnlyCheckedIn" type="checkbox"> Kun innleverte</label>
+      <button id="clearScreentime" class="danger" type="button">Tøm skjermtidlogg</button>
     </div>
     <div id="screentimeWrap">
       <table>
@@ -223,6 +224,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   const screentimeBody = document.getElementById('screentimeBody');
   const screentimeSort = document.getElementById('screentimeSort');
   const screentimeOnlyCheckedIn = document.getElementById('screentimeOnlyCheckedIn');
+  const clearScreentime = document.getElementById('clearScreentime');
   const importForm = document.getElementById('importForm');
   const importFile = document.getElementById('importFile');
   const slotModal = document.getElementById('slotModal');
@@ -259,7 +261,9 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   async function loadHealth() {
     const data = await api('admin_api.php?action=health');
     const s = data.summary || {};
+    const roleNo = s.node_role === 'klient' ? 'Klient' : 'Hoved';
     const items = [
+      ['Rolle', roleNo],
       ['Aktive', s.active_checkins || 0],
       ['Slots totalt', s.slots_total || 0],
       ['Slots ledige', s.slots_free_active || 0],
@@ -490,6 +494,30 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     }
   }
 
+  async function clearScreentimeLog() {
+    const ok = window.confirm('Tømme skjermtidlogg? Dette sletter historiske (utleverte) sesjoner.');
+    if (!ok) return;
+
+    try {
+      const data = await api('admin_api.php?action=clear_screentime_log', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+      });
+      if (!data.success) {
+        setMessage('Kunne ikke tømme skjermtidlogg', false);
+        return;
+      }
+
+      setMessage('Skjermtidlogg tømt (' + Number(data.deleted_sessions || 0) + ' sesjoner fjernet)', true);
+      await loadScreentime(true);
+      await loadHealth();
+      await loadEvents();
+    } catch {
+      setMessage('Kunne ikke tømme skjermtidlogg', false);
+    }
+  }
+
   activeBody.addEventListener('click', (e) => {
     const out = e.target.closest('[data-out]');
     if (out) manualCheckout(Number(out.dataset.out));
@@ -566,6 +594,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
 
   screentimeSort.addEventListener('change', renderScreentimeTable);
   screentimeOnlyCheckedIn.addEventListener('change', renderScreentimeTable);
+  clearScreentime.addEventListener('click', clearScreentimeLog);
 
   ['pointerdown', 'keydown', 'touchstart', 'scroll', 'mousemove'].forEach((evt) => {
     window.addEventListener(evt, restartIdleTimer, { passive: true });

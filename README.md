@@ -10,6 +10,7 @@ Systemet er bygget for Linux med PHP, MySQL/MariaDB og direkte ESC/POS-utskrift 
 - Automatisk tildeling av ledig slot (oppbevaring/lading)
 - Utlevering via token og adminfunksjoner
 - Adminpanel for drift, aktive innleveringer, skjermtid og slots
+- Mulighet i admin for aa tømme skjermtidlogg (historiske utleveringer)
 - Kvitteringsutskrift med logo og QR-kode via ESC/POS
 - Felles MySQL/MariaDB-database med migrering ved oppstart
 
@@ -243,6 +244,26 @@ SetEnv MOBILHOTELL_DB_PASS BYTT_TIL_STERKT_PASSORD
 EOF
 
 sudo a2enconf mobilhotell-db
+sudo systemctl restart apache2
+```
+
+### 3b. Merk maskinene som hoved/klient (anbefalt)
+
+For aa tydelig skille maskinene i UI, sett rolle i Apache-miljoet.
+
+Paa hoved-PC:
+
+```bash
+echo 'SetEnv MOBILHOTELL_NODE_ROLE hoved' | sudo tee /etc/apache2/conf-available/mobilhotell-node.conf
+sudo a2enconf mobilhotell-node
+sudo systemctl restart apache2
+```
+
+Paa klient-PC:
+
+```bash
+echo 'SetEnv MOBILHOTELL_NODE_ROLE klient' | sudo tee /etc/apache2/conf-available/mobilhotell-node.conf
+sudo a2enconf mobilhotell-node
 sudo systemctl restart apache2
 ```
 

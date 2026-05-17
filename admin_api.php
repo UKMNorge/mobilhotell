@@ -27,6 +27,16 @@ function input_json(): array
     return is_array($data) ? $data : [];
 }
 
+function node_info(): array
+{
+    $rawRole = strtolower(trim((string)(getenv('MOBILHOTELL_NODE_ROLE') ?: 'hoved')));
+    $role = in_array($rawRole, ['hoved', 'klient'], true) ? $rawRole : 'hoved';
+
+    return [
+        'role' => $role,
+    ];
+}
+
 function parse_csv_upload(PDO $pdo): array
 {
     if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
@@ -242,6 +252,7 @@ if ($action === 'health' && $method === 'GET') {
     $slotsActive = (int)$pdo->query('SELECT COUNT(*) FROM slots WHERE is_active = 1')->fetchColumn();
     $slotsBusy = (int)$pdo->query("SELECT COUNT(*) FROM slots s WHERE EXISTS (SELECT 1 FROM phone_sessions ps WHERE ps.slot_id = s.id AND ps.status = 'checked_in')")->fetchColumn();
     $participants = (int)$pdo->query('SELECT COUNT(*) FROM participants')->fetchColumn();
+    $node = node_info();
 
     out([
         'success' => true,
@@ -252,7 +263,8 @@ if ($action === 'health' && $method === 'GET') {
             'slots_busy' => $slotsBusy,
             'slots_free_active' => max(0, $slotsActive - $slotsBusy),
             'participants_total' => $participants,
-            'server_time' => gmdate('Y-m-d H:i:s')
+            'server_time' => gmdate('Y-m-d H:i:s'),
+            'node_role' => $node['role'],
         ]
     ]);
 }
@@ -362,6 +374,22 @@ if ($action === 'screentime_overview' && $method === 'GET') {
     }
 
     out(['success' => true, 'items' => $items]);
+}
+
+if ($action === 'clear_screentime_log' && $method === 'POST') {
+    // Keep active check-ins, remove completed sessions that make up historical screentime.
+    $stmt = $pdo->prepare("DELETE FROM phone_sessions WHERE status = 'checked_out'");
+    $stmt->execute();
+    $deleted = $stmt->rowCount();
+
+    log_event($pdo, 'admin_clear_screentime', 'Skjermtidlogg tomt', [
+        'deleted_sessions' => $deleted,
+    ]);
+
+    out([
+        'success' => true,
+        'deleted_sessions' => $deleted,
+    ]);
 }
 
 if ($action === 'import_csv' && $method === 'POST') {
