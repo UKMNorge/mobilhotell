@@ -246,7 +246,39 @@ sudo a2enconf mobilhotell-db
 sudo systemctl restart apache2
 ```
 
-### 4. Verifiser samtidig innsjekk
+### 4. Del kvitteringsskriver fra hoved-PC til klient-PC
+
+Kjor dette paa hoved-PC (server) for aa dele CUPS-skriveren i nettverket:
+
+```bash
+sudo cupsctl --share-printers --remote-any
+sudo lpadmin -p CT-E351 -o printer-is-shared=true
+sudo systemctl restart cups
+```
+
+Kjor dette paa klient-PC for aa legge til samme skriver via IPP:
+
+```bash
+sudo apt install -y cups-client
+sudo lpadmin -p CT-E351 -E -v ipp://10.10.10.1/printers/CT-E351 -m raw
+```
+
+Sett skriverko paa klient-PC i Apache-miljoet:
+
+```bash
+echo 'SetEnv MOBILHOTELL_PRINTER CT-E351' | sudo tee /etc/apache2/conf-available/mobilhotell-printer.conf
+sudo a2enconf mobilhotell-printer
+sudo systemctl restart apache2
+```
+
+Test fra klient-PC:
+
+```bash
+echo "test fra klient" | lp -d CT-E351
+sudo -u www-data /usr/bin/php /var/www/mobilhotell/print_receipt.php --session-id=1
+```
+
+### 5. Verifiser samtidig innsjekk
 
 - Aapne kiosk paa begge maskiner
 - Skann to ulike ID-kort samtidig
