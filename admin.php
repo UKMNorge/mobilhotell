@@ -509,7 +509,14 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
         return;
       }
 
-      setMessage('Skjermtidlogg tømt (' + Number(data.deleted_sessions || 0) + ' sesjoner fjernet)', true);
+      setMessage(
+        'Skjermtidlogg tømt ('
+        + Number(data.deleted_sessions || 0)
+        + ' historiske slettet, '
+        + Number(data.reset_active_sessions || 0)
+        + ' aktive nullstilt)',
+        true
+      );
       await loadScreentime(true);
       await loadHealth();
       await loadEvents();

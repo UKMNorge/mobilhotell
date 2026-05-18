@@ -361,6 +361,7 @@ if ($action === 'screentime_overview' && $method === 'GET') {
         FROM participants p
         LEFT JOIN phone_sessions ps ON ps.participant_id = p.id
         GROUP BY p.id, p.qr_code, p.first_name, p.last_name, p.county, p.participant_type
+        HAVING checked_in = 1 OR screenfree_seconds > 0
         ORDER BY screenfree_seconds DESC, p.last_name ASC, p.first_name ASC
         LIMIT ?");
     $stmt->bindValue(1, $limit, PDO::PARAM_INT);
@@ -377,18 +378,28 @@ if ($action === 'screentime_overview' && $method === 'GET') {
 }
 
 if ($action === 'clear_screentime_log' && $method === 'POST') {
-    // Keep active check-ins, remove completed sessions that make up historical screentime.
-    $stmt = $pdo->prepare("DELETE FROM phone_sessions WHERE status = 'checked_out'");
-    $stmt->execute();
-    $deleted = $stmt->rowCount();
+    // Clear historical screentime and reset ongoing timer for active check-ins.
+    $pdo->beginTransaction();
+
+    $resetStmt = $pdo->prepare("UPDATE phone_sessions SET checkin_time = NOW() WHERE status = 'checked_in'");
+    $resetStmt->execute();
+    $resetActive = $resetStmt->rowCount();
+
+    $deleteStmt = $pdo->prepare("DELETE FROM phone_sessions WHERE status = 'checked_out'");
+    $deleteStmt->execute();
+    $deleted = $deleteStmt->rowCount();
+
+    $pdo->commit();
 
     log_event($pdo, 'admin_clear_screentime', 'Skjermtidlogg tomt', [
         'deleted_sessions' => $deleted,
+        'reset_active_sessions' => $resetActive,
     ]);
 
     out([
         'success' => true,
         'deleted_sessions' => $deleted,
+        'reset_active_sessions' => $resetActive,
     ]);
 }
 
