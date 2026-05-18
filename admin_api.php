@@ -148,6 +148,38 @@ if ($action === 'active_list' && $method === 'GET') {
     out(['success' => true, 'items' => $items]);
 }
 
+if ($action === 'storage_active_list' && $method === 'GET') {
+    $q = trim((string)($_GET['q'] ?? ''));
+    $needle = '%' . mb_strtolower($q) . '%';
+
+    if ($q === '') {
+        $stmt = $pdo->query("SELECT ss.id AS session_id, p.qr_code, p.first_name, p.last_name, ss.checkin_time
+            FROM storage_sessions ss
+            JOIN participants p ON p.id = ss.participant_id
+            WHERE ss.status = 'checked_in'
+            ORDER BY ss.checkin_time ASC");
+    } else {
+        $stmt = $pdo->prepare("SELECT ss.id AS session_id, p.qr_code, p.first_name, p.last_name, ss.checkin_time
+            FROM storage_sessions ss
+            JOIN participants p ON p.id = ss.participant_id
+            WHERE ss.status = 'checked_in'
+              AND (
+                lower(p.qr_code) LIKE ?
+                OR lower(CONCAT(p.first_name, ' ', p.last_name)) LIKE ?
+                OR lower(CONCAT(p.last_name, ' ', p.first_name)) LIKE ?
+              )
+            ORDER BY ss.checkin_time ASC");
+        $stmt->execute([$needle, $needle, $needle]);
+    }
+
+    $items = $stmt->fetchAll();
+    foreach ($items as &$row) {
+        $row['name'] = trim((string)$row['first_name'] . ' ' . (string)$row['last_name']);
+    }
+
+    out(['success' => true, 'items' => $items]);
+}
+
 if ($action === 'slot_grid' && $method === 'GET') {
     $stmt = $pdo->query("SELECT s.id AS slot_id, s.slot_number, s.slot_type, s.is_active,
         ps.id AS session_id, p.qr_code, p.first_name, p.last_name
@@ -224,6 +256,27 @@ if ($action === 'manual_checkout' && $method === 'POST') {
     out(['success' => $stmt->rowCount() > 0]);
 }
 
+if ($action === 'storage_manual_checkout' && $method === 'POST') {
+    $input = input_json();
+    $sessionId = (int)($input['session_id'] ?? 0);
+    if ($sessionId <= 0) {
+        out(['success' => false, 'error' => 'missing_session_id'], 400);
+    }
+
+    $stmt = $pdo->prepare("UPDATE storage_sessions
+        SET checkout_time = NOW(), status = 'checked_out'
+        WHERE id = ? AND status = 'checked_in'");
+    $stmt->execute([$sessionId]);
+
+    if ($stmt->rowCount() > 0) {
+        log_event($pdo, 'admin_storage_manual_checkout', 'Generell oppbevaring utlevering fra admin', [
+            'session_id' => $sessionId,
+        ]);
+    }
+
+    out(['success' => $stmt->rowCount() > 0]);
+}
+
 if ($action === 'set_slot_active' && $method === 'POST') {
     $input = input_json();
     $slotId = (int)($input['slot_id'] ?? 0);
@@ -248,6 +301,7 @@ if ($action === 'set_slot_active' && $method === 'POST') {
 
 if ($action === 'health' && $method === 'GET') {
     $active = (int)$pdo->query("SELECT COUNT(*) FROM phone_sessions WHERE status = 'checked_in'")->fetchColumn();
+    $activeStorage = (int)$pdo->query("SELECT COUNT(*) FROM storage_sessions WHERE status = 'checked_in'")->fetchColumn();
     $slotsTotal = (int)$pdo->query('SELECT COUNT(*) FROM slots')->fetchColumn();
     $slotsActive = (int)$pdo->query('SELECT COUNT(*) FROM slots WHERE is_active = 1')->fetchColumn();
     $slotsBusy = (int)$pdo->query("SELECT COUNT(*) FROM slots s WHERE EXISTS (SELECT 1 FROM phone_sessions ps WHERE ps.slot_id = s.id AND ps.status = 'checked_in')")->fetchColumn();
@@ -258,6 +312,7 @@ if ($action === 'health' && $method === 'GET') {
         'success' => true,
         'summary' => [
             'active_checkins' => $active,
+            'active_storage_checkins' => $activeStorage,
             'slots_total' => $slotsTotal,
             'slots_active' => $slotsActive,
             'slots_busy' => $slotsBusy,

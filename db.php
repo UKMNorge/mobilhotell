@@ -262,6 +262,24 @@ function initialize_schema(PDO $pdo): void
         ensure_slot_capacity($pdo, 'storage', 'S', 180);
         ensure_slot_capacity($pdo, 'charging', 'L', 120);
         mark_schema_version($pdo, 5);
+        $version = 5;
+    }
+
+    if ($version < 6) {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS storage_sessions (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            participant_id INT UNSIGNED NOT NULL,
+            checkin_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            checkout_time DATETIME NULL,
+            status ENUM('checked_in', 'checked_out') NOT NULL DEFAULT 'checked_in',
+            active_participant_id INT UNSIGNED GENERATED ALWAYS AS (CASE WHEN status = 'checked_in' THEN participant_id ELSE NULL END) STORED,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_storage_sessions_active_participant (active_participant_id),
+            KEY idx_storage_sessions_participant_status (participant_id, status),
+            KEY idx_storage_sessions_status_checkin (status, checkin_time),
+            CONSTRAINT fk_storage_sessions_participant FOREIGN KEY (participant_id) REFERENCES participants(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        mark_schema_version($pdo, 6);
     }
 }
 

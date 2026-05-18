@@ -11,6 +11,7 @@ Systemet er bygget for Linux med PHP, MySQL/MariaDB og direkte ESC/POS-utskrift 
 - Utlevering via token og adminfunksjoner
 - Adminpanel for drift, aktive innleveringer, skjermtid og slots
 - Mulighet i admin for aa tømme skjermtidlogg (historiske utleveringer)
+- Generell oppbevaring-modus: scan inn første gang, scan ut neste gang
 - Kvitteringsutskrift med logo og QR-kode via ESC/POS
 - Felles MySQL/MariaDB-database med migrering ved oppstart
 
@@ -128,7 +129,38 @@ sudo -u www-data /usr/bin/php /var/www/mobilhotell/print_receipt.php --session-i
 ### 7. Åpne applikasjonen
 
 - Kiosk: http://localhost/index.php
-- Admin: http://localhost/admin.php
+- Admin mobilhotell: http://localhost/admin.php
+- Admin generell oppbevaring: http://localhost/admin_general.php
+
+### 8. Velg løsning i kiosk (store knapper)
+
+I kioskvisningen finnes to tydelige, store knapper:
+
+- `Mobilhotell (slot/lading)`
+- `Generell oppbevaring (scan inn/ut)`
+
+`Generell oppbevaring` fungerer slik:
+
+- Første scan av QR registrerer `inn`
+- Neste scan av samme QR registrerer `ut`
+- Deretter vil neste scan igjen registrere `inn` osv.
+
+Denne modusen virker med felles database, slik at den kan brukes:
+
+- samtidig på hoved-PC og klient-PC
+- eller kun på én av maskinene
+
+### 9. Admin for generell oppbevaring
+
+Generell oppbevaring har egen adminside: `admin_general.php`.
+
+Der kan du:
+
+- se alle som er aktivt innlevert i generell oppbevaring
+- søke på navn eller QR
+- registrere manuell utlevering direkte fra admin
+
+Mobilhotell administreres fortsatt i `admin.php`.
 
 ## Automatisk USB-backup (anbefalt)
 

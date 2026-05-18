@@ -17,6 +17,12 @@ body {
   overflow: hidden;
   cursor: none;
 }
+body.mode-phone {
+  background: #17332f;
+}
+body.mode-storage {
+  background: #3a1f44;
+}
 body * {
   cursor: none !important;
 }
@@ -38,13 +44,44 @@ h1 {
   grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
-  position: sticky;
-  top: 0;
-  z-index: 5;
   padding: 10px;
   border-radius: 12px;
   background: rgba(16, 36, 33, 0.94);
   backdrop-filter: blur(2px);
+}
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 auto 10px;
+  max-width: 1200px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(9, 22, 20, 0.88);
+  backdrop-filter: blur(2px);
+}
+.mode-btn {
+  border: 2px solid rgba(255,255,255,.3);
+  border-radius: 14px;
+  background: #e7efe9;
+  color: #16332f;
+  font-size: clamp(26px, 2.1vw, 36px);
+  font-weight: 800;
+  padding: 18px;
+  min-height: 82px;
+}
+.mode-btn.active {
+  color: #fff;
+  border-color: rgba(255,255,255,.6);
+}
+.mode-btn.mode-phone.active {
+  background: #0d8f4a;
+}
+.mode-btn.mode-storage.active {
+  background: #8b2fc8;
 }
 .chip {
   border: 0;
@@ -74,6 +111,16 @@ h1 {
   border: 1px solid rgba(255,255,255,.22);
   border-radius: 14px;
   padding: 14px;
+}
+body.mode-storage .top-tools {
+  background: rgba(46, 21, 54, 0.94);
+}
+body.mode-storage .admin-panel {
+  background: rgba(53, 25, 64, 0.94);
+  border: 1px solid rgba(255,255,255,.3);
+}
+body.mode-storage .capacity-fill {
+  background: #c45ef8;
 }
 .admin-panel[hidden] {
   display: none;
@@ -457,6 +504,9 @@ body.showing-card .avatar {
   height: clamp(220px, 27vh, 320px);
 }
 @media (max-width: 780px) {
+  .mode-switch {
+    grid-template-columns: 1fr;
+  }
   .top-tools {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -554,7 +604,7 @@ body.showing-card .avatar {
 }
 @media print {
   body { background: #fff; color: #111; }
-  main > h1, main > p, #search, #results, #loading, .top-tools { display: none !important; }
+  main > h1, main > p, #search, #results, #loading, .top-tools, .mode-switch { display: none !important; }
   #view { margin-top: 0; }
   .card { background: #fff; border: 1px solid #ddd; color: #111; }
   .print-only { display: block; }
@@ -563,14 +613,19 @@ body.showing-card .avatar {
 </head>
 <body>
 <main>
-  <h1>Scan QR-kode</h1>
-  <p class="subhead">eller søk deltakernavn</p>
+  <div class="mode-switch">
+    <button id="modePhone" class="mode-btn mode-phone active" type="button">Mobilhotell (slot/lading)</button>
+    <button id="modeStorage" class="mode-btn mode-storage" type="button">Generell oppbevaring (scan inn/ut)</button>
+  </div>
+
+  <h1 id="pageTitle">Mobilhotell</h1>
+  <p id="pageSubhead" class="subhead">Scan QR-kode for slot/lading, eller søk deltakernavn</p>
 
   <div class="top-tools">
     <button id="btnFocus" class="chip">Reaktiver scanner</button>
     <button id="btnReset" class="chip">Tøm skjerm</button>
     <span id="netState" class="chip">Online</span>
-    <span id="nodeRole" class="chip">Rolle: -</span>
+    <a id="adminQuickLink" class="chip chip-link" href="admin.php">Admin mobilhotell</a>
   </div>
 
   <section id="adminPanel" class="admin-panel">
@@ -609,7 +664,11 @@ body.showing-card .avatar {
   const btnReset = document.getElementById('btnReset');
   const btnClearSearch = document.getElementById('btnClearSearch');
   const netState = document.getElementById('netState');
-  const nodeRole = document.getElementById('nodeRole');
+  const adminQuickLink = document.getElementById('adminQuickLink');
+  const modePhone = document.getElementById('modePhone');
+  const modeStorage = document.getElementById('modeStorage');
+  const pageTitle = document.getElementById('pageTitle');
+  const pageSubhead = document.getElementById('pageSubhead');
   const adminPanel = document.getElementById('adminPanel');
   const capacityGrid = document.getElementById('capacityGrid');
   const osk = document.getElementById('osk');
@@ -625,6 +684,7 @@ body.showing-card .avatar {
   let lastScanAt = 0;
   let oskTarget = null;
   let oskShift = false;
+  let currentMode = localStorage.getItem('mobilhotell_mode') === 'storage' ? 'storage' : 'phone';
 
   const oskLayout = [
     ['1','2','3','4','5','6','7','8','9','0','backspace'],
@@ -705,6 +765,49 @@ body.showing-card .avatar {
     loading.style.display = on ? 'block' : 'none';
   }
 
+  function formatHoursMinutes(totalSeconds) {
+    const sec = Math.max(0, Number(totalSeconds || 0));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return h + ' t ' + m + ' min';
+  }
+
+  function applyModeUI() {
+    modePhone.classList.toggle('active', currentMode === 'phone');
+    modeStorage.classList.toggle('active', currentMode === 'storage');
+    document.body.classList.toggle('mode-phone', currentMode === 'phone');
+    document.body.classList.toggle('mode-storage', currentMode === 'storage');
+
+    if (currentMode === 'storage') {
+      pageTitle.textContent = 'Generell oppbevaring';
+      pageSubhead.textContent = 'Scan QR for å registrere inn eller ut';
+      search.placeholder = 'Søk navn eller QR (generell oppbevaring)';
+      adminPanel.hidden = true;
+      adminQuickLink.textContent = 'Admin generell';
+      adminQuickLink.href = 'admin_general.php';
+    } else {
+      pageTitle.textContent = 'Mobilhotell';
+      pageSubhead.textContent = 'Scan QR-kode for slot/lading, eller søk deltakernavn';
+      search.placeholder = 'Søk navn eller QR';
+      adminPanel.hidden = false;
+      adminQuickLink.textContent = 'Admin mobilhotell';
+      adminQuickLink.href = 'admin.php';
+    }
+  }
+
+  function setMode(mode) {
+    currentMode = mode === 'storage' ? 'storage' : 'phone';
+    localStorage.setItem('mobilhotell_mode', currentMode);
+    applyModeUI();
+    view.innerHTML = '';
+    search.value = '';
+    results.innerHTML = '';
+    scanner.value = '';
+    document.body.classList.remove('showing-card');
+    hideKeyboard();
+    scanner.focus();
+  }
+
   function capacityFillClass(percent) {
     if (percent >= 90) return 'capacity-fill danger';
     if (percent >= 75) return 'capacity-fill warn';
@@ -739,17 +842,6 @@ body.showing-card .avatar {
     }
   }
 
-  async function loadNodeRole() {
-    try {
-      const data = await json('admin_api.php?action=health');
-      const s = data.summary || {};
-      const role = s.node_role === 'klient' ? 'Klient' : 'Hoved';
-      nodeRole.textContent = 'Rolle: ' + role;
-    } catch {
-      nodeRole.textContent = 'Rolle: -';
-    }
-  }
-
   function scheduleReset() {
     if (resetTimer) clearTimeout(resetTimer);
     resetTimer = setTimeout(() => {
@@ -757,7 +849,6 @@ body.showing-card .avatar {
       document.body.classList.remove('showing-card');
       hideKeyboard();
       loadCapacity();
-      loadNodeRole();
     }, 12000);
   }
 
@@ -810,6 +901,11 @@ body.showing-card .avatar {
   }
 
   async function lookupQr(qr) {
+    if (currentMode === 'storage') {
+      await toggleStorage({ qr });
+      return;
+    }
+
     const now = Date.now();
     if (qr === lastScanQr && (now - lastScanAt) < 350) {
       return;
@@ -829,6 +925,46 @@ body.showing-card .avatar {
       scheduleReset();
     } catch {
       view.innerHTML = '<div class="error">Feil ved oppslag</div>';
+      scheduleReset();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function toggleStorage(payload) {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (payload.qr) params.set('qr', payload.qr);
+      if (payload.participant_id) params.set('participant_id', String(payload.participant_id));
+
+      const data = await json('storage_toggle.php?' + params.toString());
+      if (!data.success) {
+        let msg = 'Feil i generell oppbevaring';
+        if (data.error === 'participant_not_found') msg = 'Deltaker ikke funnet';
+        view.innerHTML = '<div class="error">' + esc(msg) + '</div>';
+        scheduleReset();
+        return;
+      }
+
+      const isIn = data.action === 'checked_in';
+      const title = isIn ? 'Innlevert i generell oppbevaring' : 'Utlevert fra generell oppbevaring';
+      const periodText = isIn ? '-' : formatHoursMinutes(data.period_seconds || 0);
+      const totalText = formatHoursMinutes(data.total_seconds || 0);
+
+      view.innerHTML = '<div class="card">'
+        + '<div class="slot">' + esc(isIn ? 'INN' : 'UT') + '</div>'
+        + '<div class="name" style="font-size:36px">' + esc(data.name || '') + '</div>'
+        + '<div style="font-size:28px; margin-top:8px"><strong>' + esc(title) + '</strong></div>'
+        + '<div style="font-size:24px; margin-top:6px">Denne perioden: <strong>' + esc(periodText) + '</strong></div>'
+        + '<div style="font-size:24px; margin-top:4px">Totalt i generell oppbevaring: <strong>' + esc(totalText) + '</strong></div>'
+        + '</div>';
+
+      document.body.classList.add('showing-card');
+      hideKeyboard();
+      scheduleReset();
+    } catch {
+      view.innerHTML = '<div class="error">Feil i generell oppbevaring</div>';
       scheduleReset();
     } finally {
       setLoading(false);
@@ -1046,6 +1182,9 @@ body.showing-card .avatar {
     lookupQr(qr);
   });
 
+  modePhone.addEventListener('click', () => setMode('phone'));
+  modeStorage.addEventListener('click', () => setMode('storage'));
+
   btnFocus.addEventListener('click', () => scanner.focus());
   btnReset.addEventListener('click', () => {
     view.innerHTML = '';
@@ -1066,9 +1205,8 @@ body.showing-card .avatar {
   window.addEventListener('resize', fitReceiptToViewport);
   updateNetState();
   loadCapacity();
-  loadNodeRole();
+  applyModeUI();
   setInterval(loadCapacity, 15000);
-  setInterval(loadNodeRole, 30000);
 
   createKeyboard();
 
@@ -1152,6 +1290,11 @@ body.showing-card .avatar {
     search.value = '';
     setLoading(true);
     try {
+      if (currentMode === 'storage') {
+        await toggleStorage({ participant_id: id });
+        return;
+      }
+
       const data = await json('lookup.php?participant_id=' + encodeURIComponent(String(id)));
       if (!data.found) {
         view.innerHTML = '<div class="error">Deltaker ikke funnet</div>';
