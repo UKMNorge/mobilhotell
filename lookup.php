@@ -89,6 +89,7 @@ echo json_encode([
     'participant_id' => (int)$p['id'],
     'qr' => $p['qr_code'],
     'name' => trim($p['first_name'] . ' ' . $p['last_name']),
+    'phone_number' => (string)($p['phone_number'] ?? ''),
     'county' => $p['county'],
     'type' => $p['participant_type'],
     'image' => $p['image_path'] ?: 'images/default.png',

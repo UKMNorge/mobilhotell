@@ -798,6 +798,14 @@ body.showing-card .avatar {
     }
   }
 
+  async function printStorageLabel(storageSessionId) {
+    if (Number(storageSessionId) <= 0) {
+      return false;
+    }
+    const printData = await json('print_storage_label.php?storage_session_id=' + encodeURIComponent(String(storageSessionId)) + '&_ts=' + Date.now());
+    return !!(printData && printData.success);
+  }
+
   function setMode(mode) {
     currentMode = mode === 'storage' ? 'storage' : 'phone';
     localStorage.setItem('mobilhotell_mode', currentMode);
@@ -981,13 +989,23 @@ body.showing-card .avatar {
       const title = isIn ? 'Innlevert i generell oppbevaring' : 'Utlevert fra generell oppbevaring';
       const periodText = isIn ? '-' : formatHoursMinutes(data.period_seconds || 0);
       const totalText = formatHoursMinutes(data.total_seconds || 0);
+      let labelChoice = '';
+      if (isIn && Number(data.storage_session_id || 0) > 0) {
+        labelChoice = '<div style="margin-top:10px">'
+          + '<button class="btn btn-primary" type="button" data-print-storage-label="' + Number(data.storage_session_id) + '">Skriv ut etikett</button>'
+          + ' <button class="btn btn-warn" type="button" data-skip-storage-label="1">Ikke skriv ut</button>'
+          + '</div>'
+          + '<div id="storageLabelStatus" style="font-size:20px; margin-top:8px"></div>';
+      }
 
       view.innerHTML = '<div class="card">'
         + '<div class="slot">' + esc(isIn ? 'INN' : 'UT') + '</div>'
         + '<div class="name" style="font-size:36px">' + esc(data.name || '') + '</div>'
         + '<div style="font-size:28px; margin-top:8px"><strong>' + esc(title) + '</strong></div>'
+        + '<div style="font-size:24px; margin-top:4px">Telefon: <strong>' + esc(data.phone_number || '-') + '</strong></div>'
         + '<div style="font-size:24px; margin-top:6px">Denne perioden: <strong>' + esc(periodText) + '</strong></div>'
         + '<div style="font-size:24px; margin-top:4px">Totalt i generell oppbevaring: <strong>' + esc(totalText) + '</strong></div>'
+        + labelChoice
         + '</div>';
 
       document.body.classList.add('showing-card');
@@ -1215,6 +1233,30 @@ body.showing-card .avatar {
 
   modePhone.addEventListener('click', () => setMode('phone'));
   modeStorage.addEventListener('click', () => setMode('storage'));
+
+  view.addEventListener('click', async (e) => {
+    const printBtn = e.target.closest('[data-print-storage-label]');
+    if (printBtn) {
+      const statusEl = document.getElementById('storageLabelStatus');
+      const sessionId = Number(printBtn.dataset.printStorageLabel || 0);
+      printBtn.disabled = true;
+      if (statusEl) statusEl.innerHTML = 'Skriver ut etikett...';
+      try {
+        const ok = await printStorageLabel(sessionId);
+        if (statusEl) statusEl.innerHTML = ok ? 'Etikett: <strong>skrevet ut</strong>' : 'Etikett: <strong>feilet</strong>';
+      } catch {
+        if (statusEl) statusEl.innerHTML = 'Etikett: <strong>feilet</strong>';
+      }
+      return;
+    }
+
+    const skipBtn = e.target.closest('[data-skip-storage-label]');
+    if (skipBtn) {
+      const statusEl = document.getElementById('storageLabelStatus');
+      if (statusEl) statusEl.innerHTML = 'Etikett: hoppet over';
+      skipBtn.disabled = true;
+    }
+  });
 
   btnFocus.addEventListener('click', () => scanner.focus());
   btnReset.addEventListener('click', () => {

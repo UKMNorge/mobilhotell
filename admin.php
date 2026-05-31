@@ -197,7 +197,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
       <input id="importFile" type="file" accept=".csv,text/csv">
       <button type="submit" class="primary">Importer</button>
     </form>
-    <div style="font-size:13px; margin-top:8px; color:#4a5450;">Kolonner: qr_code, first_name, last_name, county, participant_type, image_path</div>
+    <div style="font-size:13px; margin-top:8px; color:#4a5450;">Kolonner: qr_code, first_name, last_name, phone_number, county, participant_type, image_path</div>
     <div style="margin-top:8px;"><a class="btn-link ghost" href="sql/sample_participants.csv" download>Last ned eksempel-CSV</a></div>
   </section>
 </main>

@@ -55,9 +55,11 @@ try {
 
     $action = 'checked_in';
     $periodSeconds = 0;
+    $storageSessionId = 0;
 
     if ($active) {
         $action = 'checked_out';
+        $storageSessionId = (int)$active['id'];
         $update = $pdo->prepare("UPDATE storage_sessions
             SET checkout_time = NOW(), status = 'checked_out'
             WHERE id = ? AND status = 'checked_in'");
@@ -74,6 +76,7 @@ try {
         $insert = $pdo->prepare("INSERT INTO storage_sessions(participant_id, checkin_time, status)
             VALUES (?, NOW(), 'checked_in')");
         $insert->execute([(int)$participant['id']]);
+        $storageSessionId = (int)$pdo->lastInsertId();
     }
 
     $totalStmt = $pdo->prepare("SELECT COALESCE(SUM(
@@ -101,8 +104,11 @@ try {
     echo json_encode([
         'success' => true,
         'action' => $action,
+        'storage_session_id' => $storageSessionId,
+        'participant_id' => (int)$participant['id'],
         'name' => trim((string)$participant['first_name'] . ' ' . (string)$participant['last_name']),
         'qr' => (string)$participant['qr_code'],
+        'phone_number' => (string)($participant['phone_number'] ?? ''),
         'period_seconds' => $periodSeconds,
         'total_seconds' => $totalSeconds,
     ]);

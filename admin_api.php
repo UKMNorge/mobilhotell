@@ -74,17 +74,25 @@ function parse_csv_upload(PDO $pdo): array
     }
 
     $idx = array_flip($cols);
+    $phoneCol = null;
+    foreach (['phone_number', 'phone', 'telefon', 'mobil', 'mobile'] as $candidate) {
+        if (array_key_exists($candidate, $idx)) {
+            $phoneCol = $candidate;
+            break;
+        }
+    }
     $inserted = 0;
     $updated = 0;
 
     $select = $pdo->prepare('SELECT id FROM participants WHERE qr_code = ? LIMIT 1');
-    $insert = $pdo->prepare('INSERT INTO participants(qr_code, first_name, last_name, county, participant_type, image_path) VALUES (?, ?, ?, ?, ?, ?)');
-    $update = $pdo->prepare('UPDATE participants SET first_name = ?, last_name = ?, county = ?, participant_type = ?, image_path = ? WHERE id = ?');
+    $insert = $pdo->prepare('INSERT INTO participants(qr_code, first_name, last_name, phone_number, county, participant_type, image_path) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $update = $pdo->prepare('UPDATE participants SET first_name = ?, last_name = ?, phone_number = ?, county = ?, participant_type = ?, image_path = ? WHERE id = ?');
 
     while (($row = fgetcsv($handle)) !== false) {
         $qr = trim((string)($row[$idx['qr_code']] ?? ''));
         $first = trim((string)($row[$idx['first_name']] ?? ''));
         $last = trim((string)($row[$idx['last_name']] ?? ''));
+        $phone = $phoneCol !== null ? trim((string)($row[$idx[$phoneCol]] ?? '')) : '';
         $county = trim((string)($row[$idx['county']] ?? ''));
         $ptype = trim((string)($row[$idx['participant_type']] ?? ''));
         $image = trim((string)($row[$idx['image_path']] ?? ''));
@@ -100,10 +108,10 @@ function parse_csv_upload(PDO $pdo): array
         $select->execute([$qr]);
         $existing = $select->fetch();
         if ($existing) {
-            $update->execute([$first, $last, $county, $ptype, $image, (int)$existing['id']]);
+            $update->execute([$first, $last, $phone, $county, $ptype, $image, (int)$existing['id']]);
             $updated++;
         } else {
-            $insert->execute([$qr, $first, $last, $county, $ptype, $image]);
+            $insert->execute([$qr, $first, $last, $phone, $county, $ptype, $image]);
             $inserted++;
         }
     }

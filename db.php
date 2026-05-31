@@ -175,6 +175,7 @@ function initialize_schema(PDO $pdo): void
             qr_code VARCHAR(191) NOT NULL,
             first_name VARCHAR(191) NOT NULL,
             last_name VARCHAR(191) NOT NULL,
+            phone_number VARCHAR(32) NOT NULL DEFAULT '',
             county VARCHAR(191) NOT NULL DEFAULT '',
             participant_type VARCHAR(191) NOT NULL DEFAULT '',
             image_path VARCHAR(255) NOT NULL DEFAULT 'images/default.png',
@@ -280,6 +281,13 @@ function initialize_schema(PDO $pdo): void
             CONSTRAINT fk_storage_sessions_participant FOREIGN KEY (participant_id) REFERENCES participants(id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         mark_schema_version($pdo, 6);
+        $version = 6;
+    }
+
+    if ($version < 7) {
+        $pdo->exec("ALTER TABLE participants
+            ADD COLUMN IF NOT EXISTS phone_number VARCHAR(32) NOT NULL DEFAULT '' AFTER last_name");
+        mark_schema_version($pdo, 7);
     }
 }
 

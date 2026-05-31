@@ -12,6 +12,7 @@ Systemet er bygget for Linux med PHP, MySQL/MariaDB og direkte ESC/POS-utskrift 
 - Adminpanel for drift, aktive innleveringer, skjermtid og slots
 - Mulighet i admin for aa tømme skjermtidlogg (historiske utleveringer)
 - Generell oppbevaring-modus: scan inn første gang, scan ut neste gang
+- Valgfri etikettutskrift ved innlevering i generell oppbevaring (DYMO)
 - Kvitteringsutskrift med logo og QR-kode via ESC/POS
 - Felles MySQL/MariaDB-database med migrering ved oppstart
 
@@ -159,6 +160,42 @@ Der kan du:
 - se alle som er aktivt innlevert i generell oppbevaring
 - søke på navn eller QR
 - registrere manuell utlevering direkte fra admin
+
+### 10. Etiketter i generell oppbevaring (DYMO LabelWriter 400)
+
+I kioskmodus `Generell oppbevaring` vises etikettvalg kun etter vellykket `inn`.
+Da kan man velge:
+
+- `Skriv ut etikett`
+- `Ikke skriv ut`
+
+Dette valget vises ikke ved `ut`.
+Etiketten inneholder:
+
+- QR-kode
+- Navn
+- Telefonnummer
+
+Sett etikett-skriver i Apache-miljo (hoved-PC og/eller klient-PC):
+
+```bash
+echo 'SetEnv MOBILHOTELL_LABEL_PRINTER DYMO-LabelWriter-400' | sudo tee /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_MEDIA w162h288' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+sudo a2enconf mobilhotell-label
+sudo systemctl restart apache2
+```
+
+For Etikett Frakt DYMO 101x54mm (art.nr. 99014) bruker vi `w162h288` for a fylle etiketten bedre.
+
+Merk: eksakt kønavn kan variere. Sjekk med `lpstat -p`.
+
+CSV-import støtter naa ogsaa telefonnummer via en av disse kolonnene:
+
+- `phone_number` (anbefalt)
+- `phone`
+- `telefon`
+- `mobil`
+- `mobile`
 
 Mobilhotell administreres fortsatt i `admin.php`.
 
@@ -330,6 +367,43 @@ Test fra klient-PC:
 echo "test fra klient" | lp -d CT-E351
 sudo -u www-data /usr/bin/php /var/www/mobilhotell/print_receipt.php --session-id=1
 ```
+
+### 4b. Del DYMO-etikettskriver fra hoved-PC til klient-PC
+
+Hvis DYMO bare er fysisk koblet til hoved-PC, skal klient-PC bruke delt CUPS-ko via IPP.
+
+Kjor paa hoved-PC:
+
+```bash
+sudo cupsctl --share-printers --remote-any
+sudo lpadmin -p DYMO-LabelWriter-400 -o printer-is-shared=true
+sudo systemctl restart cups
+```
+
+Kjor paa klient-PC:
+
+```bash
+sudo apt install -y cups-client
+sudo lpadmin -p DYMO-LabelWriter-400 -E -v ipp://10.10.10.1/printers/DYMO-LabelWriter-400 -m everywhere
+```
+
+Sett etikett-ko paa klient-PC i Apache-miljoet:
+
+```bash
+echo 'SetEnv MOBILHOTELL_LABEL_PRINTER DYMO-LabelWriter-400' | sudo tee /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_MEDIA w162h288' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+sudo a2enconf mobilhotell-label
+sudo systemctl restart apache2
+```
+
+Test fra klient-PC:
+
+```bash
+wget -qO- "http://localhost/print_storage_label.php?storage_session_id=1&_ts=$(date +%s%N)"
+lpstat -W all -o DYMO-LabelWriter-400 | tail -n 3
+```
+
+Na vil valg av `Skriv ut etikett` paa klient-PC sende jobben til DYMO-skriveren paa hoved-PC.
 
 ### 5. Verifiser samtidig innsjekk
 
