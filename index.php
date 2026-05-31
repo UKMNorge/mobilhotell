@@ -682,6 +682,9 @@ body.showing-card .avatar {
   let scanResetTimer = null;
   let lastScanQr = '';
   let lastScanAt = 0;
+  let storageToggleInFlight = false;
+  let lastStorageToggleQr = '';
+  let lastStorageToggleAt = 0;
   let oskTarget = null;
   let oskShift = false;
   let currentMode = localStorage.getItem('mobilhotell_mode') === 'storage' ? 'storage' : 'phone';
@@ -900,18 +903,25 @@ body.showing-card .avatar {
     return basePath + p.replace(/^\.\//, '');
   }
 
+  function normalizeQrInput(value) {
+    return String(value || '').trim().replace(/[+＋–—]/g, '-');
+  }
+
   async function lookupQr(qr) {
-    if (currentMode === 'storage') {
-      await toggleStorage({ qr });
-      return;
-    }
+    qr = normalizeQrInput(qr);
+    if (!qr) return;
 
     const now = Date.now();
-    if (qr === lastScanQr && (now - lastScanAt) < 350) {
+    if (qr === lastScanQr && (now - lastScanAt) < 450) {
       return;
     }
     lastScanQr = qr;
     lastScanAt = now;
+
+    if (currentMode === 'storage') {
+      await toggleStorage({ qr });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -932,10 +942,22 @@ body.showing-card .avatar {
   }
 
   async function toggleStorage(payload) {
+    const qr = normalizeQrInput(payload.qr || '');
+    const now = Date.now();
+
+    if (storageToggleInFlight) {
+      return;
+    }
+
+    if (qr && qr === lastStorageToggleQr && (now - lastStorageToggleAt) < 1400) {
+      return;
+    }
+
+    storageToggleInFlight = true;
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (payload.qr) params.set('qr', payload.qr);
+      if (qr) params.set('qr', qr);
       if (payload.participant_id) params.set('participant_id', String(payload.participant_id));
       params.set('_ts', String(Date.now()));
 
@@ -951,6 +973,9 @@ body.showing-card .avatar {
         scheduleReset();
         return;
       }
+
+      lastStorageToggleQr = normalizeQrInput(data.qr || qr);
+      lastStorageToggleAt = Date.now();
 
       const isIn = data.action === 'checked_in';
       const title = isIn ? 'Innlevert i generell oppbevaring' : 'Utlevert fra generell oppbevaring';
@@ -972,6 +997,7 @@ body.showing-card .avatar {
       view.innerHTML = '<div class="error">Feil i generell oppbevaring</div>';
       scheduleReset();
     } finally {
+      storageToggleInFlight = false;
       setLoading(false);
     }
   }
@@ -1098,7 +1124,7 @@ body.showing-card .avatar {
   scanner.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const qr = scanner.value.trim();
+    const qr = normalizeQrInput(scanner.value);
     scanner.value = '';
     if (!qr) return;
     lookupQr(qr);
@@ -1180,7 +1206,7 @@ body.showing-card .avatar {
   search.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const qr = search.value.trim();
+    const qr = normalizeQrInput(search.value);
     if (!qr) return;
     search.value = '';
     results.innerHTML = '';
