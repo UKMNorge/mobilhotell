@@ -6,6 +6,7 @@
 <title>Generell Oppbevaring Admin</title>
 <style>
 body { margin: 0; font-family: Arial, sans-serif; background: #f2ecf8; color: #111; }
+body.cursor-hidden, body.cursor-hidden * { cursor: none !important; }
 header { background: #5f2f86; color: #fff; padding: 14px 22px; position: sticky; top: 0; z-index: 10; }
 .header-row { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .header-row h1 { margin: 0; font-size: 40px; }
@@ -40,6 +41,7 @@ th, td { border-bottom: 1px solid #e8e0ef; padding: 10px; text-align: left; font
   <div class="header-row">
     <h1>Generell Oppbevaring Admin</h1>
     <div class="header-actions">
+      <button id="cursorToggle" class="ghost" type="button">Musepeker: PÅ</button>
       <a class="btn-link ghost" href="index.php">Tilbake</a>
       <a class="btn-link ghost" href="admin.php">Mobilhotell admin</a>
     </div>
@@ -86,10 +88,21 @@ th, td { border-bottom: 1px solid #e8e0ef; padding: 10px; text-align: left; font
   const generalBody = document.getElementById('generalBody');
   const eventLog = document.getElementById('eventLog');
   const message = document.getElementById('message');
+  const cursorToggle = document.getElementById('cursorToggle');
 
   let autoOn = true;
   let poll = null;
   let searchTimer = null;
+
+  function applyCursorSetting(hidden) {
+    document.body.classList.toggle('cursor-hidden', hidden);
+    cursorToggle.textContent = 'Musepeker: ' + (hidden ? 'AV' : 'PÅ');
+  }
+
+  function loadCursorSetting() {
+    const hidden = localStorage.getItem('admin_cursor_hidden') === '1';
+    applyCursorSetting(hidden);
+  }
 
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
@@ -211,7 +224,14 @@ th, td { border-bottom: 1px solid #e8e0ef; padding: 10px; text-align: left; font
     if (autoOn) poll = setInterval(() => loadAll(false), 15000);
   });
 
+  cursorToggle.addEventListener('click', () => {
+    const hidden = !document.body.classList.contains('cursor-hidden');
+    localStorage.setItem('admin_cursor_hidden', hidden ? '1' : '0');
+    applyCursorSetting(hidden);
+  });
+
   poll = setInterval(() => loadAll(false), 15000);
+  loadCursorSetting();
   loadAll(true);
 })();
 </script>

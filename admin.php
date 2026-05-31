@@ -6,6 +6,7 @@
 <title>Mobilhotell Admin</title>
 <style>
 body { margin: 0; font-family: Arial, sans-serif; background: #e9efea; color: #111; }
+body.cursor-hidden, body.cursor-hidden * { cursor: none !important; }
 header { background: #055548; color: #fff; padding: 14px 22px; position: sticky; top: 0; z-index: 10; }
 .header-row { max-width: 1800px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .header-row h1 { margin: 0; font-size: 40px; }
@@ -120,6 +121,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   <div class="header-row">
     <h1>Mobilhotell Admin</h1>
     <div class="header-actions">
+      <button id="cursorToggle" class="ghost" type="button">Musepeker: PÅ</button>
       <a class="btn-link ghost" href="index.php">Tilbake</a>
     </div>
   </div>
@@ -230,6 +232,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   const slotModal = document.getElementById('slotModal');
   const slotModalBody = document.getElementById('slotModalBody');
   const slotModalClose = document.getElementById('slotModalClose');
+  const cursorToggle = document.getElementById('cursorToggle');
   const viewButtons = Array.from(document.querySelectorAll('[data-view]'));
   const panels = {
     health: document.getElementById('panelHealth'),
@@ -248,6 +251,16 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   let screentimeItems = [];
   let currentView = 'health';
   let lastScreentimeLoadAt = 0;
+
+  function applyCursorSetting(hidden) {
+    document.body.classList.toggle('cursor-hidden', hidden);
+    cursorToggle.textContent = 'Musepeker: ' + (hidden ? 'AV' : 'PÅ');
+  }
+
+  function loadCursorSetting() {
+    const hidden = localStorage.getItem('admin_cursor_hidden') === '1';
+    applyCursorSetting(hidden);
+  }
 
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
@@ -595,6 +608,12 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     if (autoOn) poll = setInterval(() => loadAll(false), 15000);
   });
 
+  cursorToggle.addEventListener('click', () => {
+    const hidden = !document.body.classList.contains('cursor-hidden');
+    localStorage.setItem('admin_cursor_hidden', hidden ? '1' : '0');
+    applyCursorSetting(hidden);
+  });
+
   viewButtons.forEach((btn) => {
     btn.addEventListener('click', () => showView(btn.dataset.view));
   });
@@ -608,6 +627,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   });
 
   poll = setInterval(() => loadAll(false), 15000);
+  loadCursorSetting();
   restartIdleTimer();
   showView('health');
   loadAll(true);
