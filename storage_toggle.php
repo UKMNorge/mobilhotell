@@ -6,6 +6,12 @@ require __DIR__ . '/db.php';
 
 header('Content-Type: application/json');
 
+function normalize_qr(string $value): string
+{
+    $value = trim($value);
+    return str_replace(['+', '＋', '–', '—'], '-', $value);
+}
+
 function fail(string $error): void
 {
     echo json_encode(['success' => false, 'error' => $error]);
@@ -13,7 +19,7 @@ function fail(string $error): void
 }
 
 $pdo = db();
-$qr = trim((string)($_GET['qr'] ?? ''));
+$qr = normalize_qr((string)($_GET['qr'] ?? ''));
 $participantId = (int)($_GET['participant_id'] ?? 0);
 
 if ($qr === '' && $participantId <= 0) {
