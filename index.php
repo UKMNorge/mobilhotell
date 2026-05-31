@@ -937,11 +937,16 @@ body.showing-card .avatar {
       const params = new URLSearchParams();
       if (payload.qr) params.set('qr', payload.qr);
       if (payload.participant_id) params.set('participant_id', String(payload.participant_id));
+      params.set('_ts', String(Date.now()));
 
       const data = await json('storage_toggle.php?' + params.toString());
       if (!data.success) {
         let msg = 'Feil i generell oppbevaring';
         if (data.error === 'participant_not_found') msg = 'Deltaker ikke funnet';
+        else if (data.error === 'session_conflict') msg = 'Konflikt: deltaker er allerede registrert aktiv';
+        else if (data.error === 'session_not_checked_in') msg = 'Kunne ikke registrere utlevering';
+        else if (data.error === 'server_error') msg = 'Serverfeil ved inn/ut';
+        if (data.error) msg += ' (' + String(data.error) + ')';
         view.innerHTML = '<div class="error">' + esc(msg) + '</div>';
         scheduleReset();
         return;
