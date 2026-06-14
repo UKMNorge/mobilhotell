@@ -12,7 +12,7 @@ Systemet er bygget for Linux med PHP, MySQL/MariaDB og direkte ESC/POS-utskrift 
 - Adminpanel for drift, aktive innleveringer, skjermtid og slots
 - Mulighet i admin for aa tømme skjermtidlogg (historiske utleveringer)
 - Generell oppbevaring-modus: scan inn første gang, scan ut neste gang
-- Valgfri etikettutskrift ved innlevering i generell oppbevaring (DYMO)
+- Valgfri etikettutskrift ved innlevering i generell oppbevaring (Brother DK-11208, 38x90mm, svart)
 - Kvitteringsutskrift med logo og QR-kode via ESC/POS
 - Felles MySQL/MariaDB-database med migrering ved oppstart
 
@@ -161,7 +161,7 @@ Der kan du:
 - søke på navn eller QR
 - registrere manuell utlevering direkte fra admin
 
-### 10. Etiketter i generell oppbevaring (DYMO LabelWriter 400)
+### 10. Etiketter i generell oppbevaring (Brother DK-11208, 38x90mm)
 
 I kioskmodus `Generell oppbevaring` vises etikettvalg kun etter vellykket `inn`.
 Da kan man velge:
@@ -179,13 +179,17 @@ Etiketten inneholder:
 Sett etikett-skriver i Apache-miljo (hoved-PC og/eller klient-PC):
 
 ```bash
-echo 'SetEnv MOBILHOTELL_LABEL_PRINTER DYMO-LabelWriter-400' | sudo tee /etc/apache2/conf-available/mobilhotell-label.conf
-echo 'SetEnv MOBILHOTELL_LABEL_MEDIA w162h288' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_PRINTER Brother-QL-800' | sudo tee /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BACKEND brother_ql' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_MODEL QL-800' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_LABEL 39x90' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_ROTATE 0' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_RED 0' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
 sudo a2enconf mobilhotell-label
 sudo systemctl restart apache2
 ```
 
-For Etikett Frakt DYMO 101x54mm (art.nr. 99014) bruker vi `w162h288` for a fylle etiketten bedre.
+Denne konfigurasjonen er for DK-11208 (38x90mm, kun svart). `brother_ql` bruker nøkkelen `39x90` for denne etikettfamilien.
 
 Merk: eksakt kønavn kan variere. Sjekk med `lpstat -p`.
 
@@ -368,15 +372,15 @@ echo "test fra klient" | lp -d CT-E351
 sudo -u www-data /usr/bin/php /var/www/mobilhotell/print_receipt.php --session-id=1
 ```
 
-### 4b. Del DYMO-etikettskriver fra hoved-PC til klient-PC
+### 4b. Del Brother-etikettskriver fra hoved-PC til klient-PC
 
-Hvis DYMO bare er fysisk koblet til hoved-PC, skal klient-PC bruke delt CUPS-ko via IPP.
+Hvis Brother-etikettskriveren bare er fysisk koblet til hoved-PC, skal klient-PC bruke delt CUPS-ko via IPP.
 
 Kjor paa hoved-PC:
 
 ```bash
 sudo cupsctl --share-printers --remote-any
-sudo lpadmin -p DYMO-LabelWriter-400 -o printer-is-shared=true
+sudo lpadmin -p Brother-QL-800 -o printer-is-shared=true
 sudo systemctl restart cups
 ```
 
@@ -384,14 +388,18 @@ Kjor paa klient-PC:
 
 ```bash
 sudo apt install -y cups-client
-sudo lpadmin -p DYMO-LabelWriter-400 -E -v ipp://10.10.10.1/printers/DYMO-LabelWriter-400 -m everywhere
+sudo lpadmin -p Brother-QL-800 -E -v ipp://10.10.10.1/printers/Brother-QL-800 -m everywhere
 ```
 
 Sett etikett-ko paa klient-PC i Apache-miljoet:
 
 ```bash
-echo 'SetEnv MOBILHOTELL_LABEL_PRINTER DYMO-LabelWriter-400' | sudo tee /etc/apache2/conf-available/mobilhotell-label.conf
-echo 'SetEnv MOBILHOTELL_LABEL_MEDIA w162h288' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_PRINTER Brother-QL-800' | sudo tee /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BACKEND brother_ql' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_MODEL QL-800' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_LABEL 39x90' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_ROTATE 0' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_RED 0' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
 sudo a2enconf mobilhotell-label
 sudo systemctl restart apache2
 ```
@@ -400,10 +408,10 @@ Test fra klient-PC:
 
 ```bash
 wget -qO- "http://localhost/print_storage_label.php?storage_session_id=1&_ts=$(date +%s%N)"
-lpstat -W all -o DYMO-LabelWriter-400 | tail -n 3
+lpstat -W all -o Brother-QL-800 | tail -n 3
 ```
 
-Na vil valg av `Skriv ut etikett` paa klient-PC sende jobben til DYMO-skriveren paa hoved-PC.
+Na vil valg av `Skriv ut etikett` paa klient-PC sende jobben til Brother-skriveren paa hoved-PC.
 
 ### 5. Verifiser samtidig innsjekk
 

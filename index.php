@@ -29,7 +29,7 @@ body * {
 main {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 16px 20px 22px;
+  padding: 16px 20px 22px 236px;
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -40,14 +40,20 @@ h1 {
   font-size: clamp(42px, 4.2vw, 58px);
 }
 .top-tools {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 210px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
-  margin-bottom: 12px;
+  margin: 0;
   padding: 10px;
-  border-radius: 12px;
+  border-radius: 0 12px 12px 0;
   background: rgba(16, 36, 33, 0.94);
   backdrop-filter: blur(2px);
+  z-index: 25;
 }
 .mode-switch {
   display: grid;
@@ -104,13 +110,18 @@ h1 {
   text-decoration: none;
 }
 .admin-panel {
-  margin: 8px auto 12px;
-  max-width: 1200px;
+  position: fixed;
+  left: 0;
+  bottom: 6px;
+  width: min(510px, calc(100vw - 16px));
+  margin: 0;
+  max-width: none;
   text-align: left;
   background: rgba(11, 33, 30, 0.95);
   border: 1px solid rgba(255,255,255,.22);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 0 10px 10px 0;
+  padding: 8px;
+  z-index: 24;
 }
 body.mode-storage .top-tools {
   background: rgba(46, 21, 54, 0.94);
@@ -132,42 +143,43 @@ body.keyboard-open .admin-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 .admin-panel h2 {
   margin: 0;
-  font-size: 28px;
+  font-size: 17px;
 }
 .admin-link {
   display: inline-block;
-  border-radius: 10px;
-  padding: 10px 14px;
+  border-radius: 8px;
+  padding: 5px 8px;
   background: #e8efea;
   color: #17332f;
+  font-size: 12px;
   font-weight: 700;
   text-decoration: none;
 }
 .capacity-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 6px;
 }
 .capacity-card {
   background: rgba(255,255,255,.1);
-  border-radius: 12px;
-  padding: 10px;
+  border-radius: 10px;
+  padding: 6px 7px;
 }
 .capacity-label {
-  font-size: 19px;
+  font-size: 13px;
   font-weight: 700;
 }
 .capacity-meta {
-  font-size: 22px;
-  margin: 6px 0;
+  font-size: 15px;
+  margin: 4px 0;
 }
 .capacity-track {
-  height: 14px;
+  height: 8px;
   border-radius: 999px;
   background: rgba(255,255,255,.2);
   overflow: hidden;
@@ -282,6 +294,19 @@ p {
   cursor: pointer;
   min-height: 82px;
   min-width: 0;
+}
+.participant-card .name {
+  font-size: clamp(52px, 4.8vw, 72px);
+}
+.participant-meta {
+  font-size: clamp(30px, 2.5vw, 40px);
+  font-weight: 700;
+  margin-top: 6px;
+}
+.participant-actions .btn {
+  font-size: clamp(34px, 3vw, 48px);
+  min-height: 102px;
+  padding: 22px 24px;
 }
 .btn-primary { background: #0d8f4a; color: #fff; }
 .btn-warn { background: #f5c84b; color: #111; }
@@ -504,10 +529,29 @@ body.showing-card .avatar {
   height: clamp(220px, 27vh, 320px);
 }
 @media (max-width: 780px) {
+  main {
+    padding-left: 14px;
+  }
+  .admin-panel {
+    position: static;
+    left: auto;
+    bottom: auto;
+    width: auto;
+    margin: 8px auto 12px;
+    max-width: 1200px;
+    border-radius: 14px;
+  }
   .mode-switch {
     grid-template-columns: 1fr;
   }
   .top-tools {
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none;
+    width: auto;
+    border-radius: 12px;
+    margin-bottom: 12px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   h1 { font-size: 34px; }
@@ -517,10 +561,20 @@ body.showing-card .avatar {
   .slot { font-size: 58px; }
   .avatar { width: 160px; height: 160px; }
   .action-row { grid-template-columns: 1fr; }
-  .capacity-grid { grid-template-columns: 1fr; }
+  .capacity-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .btn {
     width: 100%;
     font-size: 22px;
+  }
+  .participant-card .name {
+    font-size: 42px;
+  }
+  .participant-meta {
+    font-size: 26px;
+  }
+  .participant-actions .btn {
+    font-size: 30px;
+    min-height: 92px;
   }
   .receipt-head {
     padding: 10px 12px;
@@ -553,7 +607,7 @@ body.showing-card .avatar {
 }
 @media (max-width: 1366px), (max-height: 800px) {
   main {
-    padding: 12px 14px 16px;
+    padding: 12px 14px 16px 222px;
   }
   .card {
     padding: 10px;
@@ -625,7 +679,7 @@ body.showing-card .avatar {
     <button id="btnFocus" class="chip">Reaktiver scanner</button>
     <button id="btnReset" class="chip">Tøm skjerm</button>
     <span id="netState" class="chip">Online</span>
-    <a id="adminQuickLink" class="chip chip-link" href="admin.php">Admin mobilhotell</a>
+    <a id="adminQuickLink" class="chip chip-link" href="admin.php">Admin</a>
   </div>
 
   <section id="adminPanel" class="admin-panel">
@@ -685,6 +739,7 @@ body.showing-card .avatar {
   let storageToggleInFlight = false;
   let lastStorageToggleQr = '';
   let lastStorageToggleAt = 0;
+  let pendingStorageCheckin = null;
   let oskTarget = null;
   let oskShift = false;
   let currentMode = localStorage.getItem('mobilhotell_mode') === 'storage' ? 'storage' : 'phone';
@@ -786,14 +841,14 @@ body.showing-card .avatar {
       pageSubhead.textContent = 'Scan QR for å registrere inn eller ut';
       search.placeholder = 'Søk navn eller QR (generell oppbevaring)';
       adminPanel.hidden = true;
-      adminQuickLink.textContent = 'Admin generell';
+      adminQuickLink.textContent = 'Admin';
       adminQuickLink.href = 'admin_general.php';
     } else {
       pageTitle.textContent = 'Mobilhotell';
       pageSubhead.textContent = 'Scan QR-kode for slot/lading, eller søk deltakernavn';
       search.placeholder = 'Søk navn eller QR';
       adminPanel.hidden = false;
-      adminQuickLink.textContent = 'Admin mobilhotell';
+      adminQuickLink.textContent = 'Admin';
       adminQuickLink.href = 'admin.php';
     }
   }
@@ -927,7 +982,7 @@ body.showing-card .avatar {
     lastScanAt = now;
 
     if (currentMode === 'storage') {
-      await toggleStorage({ qr });
+      await handleStorageScan({ qr });
       return;
     }
 
@@ -947,6 +1002,100 @@ body.showing-card .avatar {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function getStoragePreview(payload) {
+    const params = new URLSearchParams();
+    const qr = normalizeQrInput(payload.qr || '');
+    if (qr) params.set('qr', qr);
+    if (payload.participant_id) params.set('participant_id', String(payload.participant_id));
+    params.set('dry_run', '1');
+    params.set('_ts', String(Date.now()));
+    return await json('storage_toggle.php?' + params.toString());
+  }
+
+  function renderStorageCheckinChoice(data) {
+    pendingStorageCheckin = {
+      participant_id: Number(data.participant_id || 0),
+      qr: normalizeQrInput(data.qr || ''),
+      image: data.image || 'images/default.png',
+      name: data.name || '',
+      county: data.county || '',
+      type: data.type || ''
+    };
+
+    view.innerHTML = '<div class="card participant-card">'
+      + '<img class="avatar" src="' + esc(resolveImage(pendingStorageCheckin.image)) + '" alt="Deltakerbilde">'
+      + '<div class="name">' + esc(pendingStorageCheckin.name) + '</div>'
+      + '<div class="participant-meta">' + esc(pendingStorageCheckin.county) + ' - ' + esc(pendingStorageCheckin.type) + '</div>'
+      + '<div class="action-row participant-actions" style="margin-top:14px">'
+      + '<button class="btn btn-primary" type="button" data-storage-checkin="print">Etikett + Oppbevar</button>'
+      + '<button class="btn btn-warn" type="button" data-storage-checkin="skip">Oppbevar</button>'
+      + '</div>'
+      + '<div id="storageLabelStatus" style="font-size:22px; margin-top:10px"></div>'
+      + '</div>';
+
+    document.body.classList.add('showing-card');
+    hideKeyboard();
+
+    const btnPrint = view.querySelector('[data-storage-checkin="print"]');
+    const btnSkip = view.querySelector('[data-storage-checkin="skip"]');
+
+    if (btnPrint) {
+      btnPrint.addEventListener('click', () => confirmStorageCheckin(true));
+    }
+    if (btnSkip) {
+      btnSkip.addEventListener('click', () => confirmStorageCheckin(false));
+    }
+  }
+
+  async function handleStorageScan(payload) {
+    setLoading(true);
+    try {
+      const preview = await getStoragePreview(payload);
+      if (!preview.success) {
+        let msg = 'Feil i generell oppbevaring';
+        if (preview.error === 'participant_not_found') msg = 'Deltaker ikke funnet';
+        else if (preview.error === 'server_error') msg = 'Serverfeil ved inn/ut';
+        if (preview.error) msg += ' (' + String(preview.error) + ')';
+        view.innerHTML = '<div class="error">' + esc(msg) + '</div>';
+        scheduleReset();
+        return;
+      }
+
+      if (preview.action === 'checked_in') {
+        renderStorageCheckinChoice(preview);
+        return;
+      }
+
+      await toggleStorage({
+        participant_id: Number(preview.participant_id || 0),
+        qr: normalizeQrInput(preview.qr || payload.qr || ''),
+        printLabel: false
+      });
+    } catch {
+      view.innerHTML = '<div class="error">Feil i generell oppbevaring</div>';
+      scheduleReset();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirmStorageCheckin(printLabel) {
+    if (!pendingStorageCheckin || storageToggleInFlight) {
+      return;
+    }
+
+    const selected = pendingStorageCheckin;
+    pendingStorageCheckin = null;
+    await toggleStorage({
+      participant_id: selected.participant_id,
+      qr: selected.qr,
+      printLabel: !!printLabel,
+      image: selected.image,
+      county: selected.county,
+      type: selected.type
+    });
   }
 
   async function toggleStorage(payload) {
@@ -987,25 +1136,25 @@ body.showing-card .avatar {
 
       const isIn = data.action === 'checked_in';
       const title = isIn ? 'Innlevert i generell oppbevaring' : 'Utlevert fra generell oppbevaring';
-      const periodText = isIn ? '-' : formatHoursMinutes(data.period_seconds || 0);
-      const totalText = formatHoursMinutes(data.total_seconds || 0);
-      let labelChoice = '';
-      if (isIn && Number(data.storage_session_id || 0) > 0) {
-        labelChoice = '<div style="margin-top:10px">'
-          + '<button class="btn btn-primary" type="button" data-print-storage-label="' + Number(data.storage_session_id) + '">Skriv ut etikett</button>'
-          + ' <button class="btn btn-warn" type="button" data-skip-storage-label="1">Ikke skriv ut</button>'
-          + '</div>'
-          + '<div id="storageLabelStatus" style="font-size:20px; margin-top:8px"></div>';
+      let labelStatus = '';
+      if (isIn && payload.printLabel === true && Number(data.storage_session_id || 0) > 0) {
+        const printed = await printStorageLabel(Number(data.storage_session_id || 0));
+        labelStatus = printed
+          ? '<div id="storageLabelStatus" style="font-size:22px; margin-top:10px"><strong>Etikett skrevet ut.</strong></div>'
+          : '<div id="storageLabelStatus" style="font-size:22px; margin-top:10px"><strong>Kunne ikke skrive ut etikett.</strong></div>';
       }
 
-      view.innerHTML = '<div class="card">'
+      const imagePath = data.image || payload.image || 'images/default.png';
+      const county = data.county || payload.county || '';
+      const type = data.type || payload.type || '';
+
+      view.innerHTML = '<div class="card participant-card">'
+        + '<img class="avatar" src="' + esc(resolveImage(imagePath)) + '" alt="Deltakerbilde">'
         + '<div class="slot">' + esc(isIn ? 'INN' : 'UT') + '</div>'
         + '<div class="name" style="font-size:36px">' + esc(data.name || '') + '</div>'
+        + '<div class="participant-meta">' + esc(county) + ' - ' + esc(type) + '</div>'
         + '<div style="font-size:28px; margin-top:8px"><strong>' + esc(title) + '</strong></div>'
-        + '<div style="font-size:24px; margin-top:4px">Telefon: <strong>' + esc(data.phone_number || '-') + '</strong></div>'
-        + '<div style="font-size:24px; margin-top:6px">Denne perioden: <strong>' + esc(periodText) + '</strong></div>'
-        + '<div style="font-size:24px; margin-top:4px">Totalt i generell oppbevaring: <strong>' + esc(totalText) + '</strong></div>'
-        + labelChoice
+        + labelStatus
         + '</div>';
 
       document.body.classList.add('showing-card');
@@ -1028,13 +1177,13 @@ body.showing-card .avatar {
     if (p.checked_in && p.session_id) {
       actions = '<div class="slot">' + esc(p.slot) + '</div><button class="btn btn-primary" data-checkout="' + Number(p.session_id) + '">Registrer utlevert</button>';
     } else {
-      actions = '<div class="action-row"><button class="btn btn-primary" data-checkin="storage">Oppbevar</button><button class="btn btn-warn" data-checkin="charging">Lad</button></div>';
+      actions = '<div class="action-row participant-actions"><button class="btn btn-primary" data-checkin="storage">Oppbevar Mobil</button><button class="btn btn-warn" data-checkin="charging">Lad Mobil</button></div>';
     }
 
-    view.innerHTML = '<div class="card">'
+    view.innerHTML = '<div class="card participant-card">'
       + '<img class="avatar" src="' + esc(resolveImage(p.image)) + '" alt="Deltakerbilde">'
       + '<div class="name">' + esc(p.name) + '</div>'
-      + '<div>' + esc(p.county) + ' - ' + esc(p.type) + '</div>'
+      + '<div class="participant-meta">' + esc(p.county) + ' - ' + esc(p.type) + '</div>'
       + '<div>Skjermfri tid: ' + screenH + ' t ' + screenMin + ' min</div>'
       + actions
       + '</div>';
@@ -1233,30 +1382,6 @@ body.showing-card .avatar {
 
   modePhone.addEventListener('click', () => setMode('phone'));
   modeStorage.addEventListener('click', () => setMode('storage'));
-
-  view.addEventListener('click', async (e) => {
-    const printBtn = e.target.closest('[data-print-storage-label]');
-    if (printBtn) {
-      const statusEl = document.getElementById('storageLabelStatus');
-      const sessionId = Number(printBtn.dataset.printStorageLabel || 0);
-      printBtn.disabled = true;
-      if (statusEl) statusEl.innerHTML = 'Skriver ut etikett...';
-      try {
-        const ok = await printStorageLabel(sessionId);
-        if (statusEl) statusEl.innerHTML = ok ? 'Etikett: <strong>skrevet ut</strong>' : 'Etikett: <strong>feilet</strong>';
-      } catch {
-        if (statusEl) statusEl.innerHTML = 'Etikett: <strong>feilet</strong>';
-      }
-      return;
-    }
-
-    const skipBtn = e.target.closest('[data-skip-storage-label]');
-    if (skipBtn) {
-      const statusEl = document.getElementById('storageLabelStatus');
-      if (statusEl) statusEl.innerHTML = 'Etikett: hoppet over';
-      skipBtn.disabled = true;
-    }
-  });
 
   btnFocus.addEventListener('click', () => scanner.focus());
   btnReset.addEventListener('click', () => {

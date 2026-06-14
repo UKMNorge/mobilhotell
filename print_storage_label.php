@@ -15,12 +15,21 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-const DEFAULT_LABEL_PRINTER = 'DYMO-LabelWriter-400';
-const DEFAULT_LABEL_MEDIA = 'w162h288';
-const LABEL_WIDTH = 1280;
-const LABEL_HEIGHT = 720;
-const LABEL_PADDING = 18;
-const LABEL_GAP = 18;
+const DEFAULT_LABEL_PRINTER = 'Brother-QL-800';
+const DEFAULT_LABEL_BACKEND = 'cups';
+const DEFAULT_LABEL_MEDIA = '';
+const DEFAULT_LABEL_MEDIA_TYPE = '';
+const DEFAULT_LABEL_PAGE_SIZE = '';
+const DEFAULT_LABEL_AUTO_CUT = '';
+const DEFAULT_LABEL_AUTO_EJECT = '';
+const DEFAULT_LABEL_ORIENTATION = '';
+const DEFAULT_LABEL_SCALING = '';
+const DEFAULT_LABEL_FIT_TO_PAGE = '';
+// With brother_ql rotate=90, input image must be 991x413 for 39x90 labels.
+const LABEL_WIDTH = 991;
+const LABEL_HEIGHT = 413;
+const LABEL_PADDING = 16;
+const LABEL_GAP = 16;
 
 function out(array $payload, int $status = 200): void
 {
@@ -29,20 +38,78 @@ function out(array $payload, int $status = 200): void
     exit;
 }
 
-function get_font_path(): ?string
+function get_label_fonts(): array
 {
-    $candidates = [
+    $regularCandidates = [
+        __DIR__ . '/assets/Inter-VariableFont_opsz,wght.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+    ];
+    $boldCandidates = [
+        __DIR__ . '/assets/Inter-VariableFont_opsz,wght.ttf',
         '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
         '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
     ];
 
-    foreach ($candidates as $path) {
+    $regular = null;
+    foreach ($regularCandidates as $path) {
         if (is_file($path)) {
-            return $path;
+            $regular = $path;
+            break;
         }
     }
 
-    return null;
+    $bold = null;
+    foreach ($boldCandidates as $path) {
+        if (is_file($path)) {
+            $bold = $path;
+            break;
+        }
+    }
+
+    if ($regular === null && $bold === null) {
+        return ['regular' => null, 'bold' => null];
+    }
+
+    if ($regular === null) {
+        $regular = $bold;
+    }
+    if ($bold === null) {
+        $bold = $regular;
+    }
+
+    return ['regular' => $regular, 'bold' => $bold];
+}
+
+function clip_text_to_width(string $font, int $size, string $text, int $maxWidth): string
+{
+    if ($maxWidth <= 0) {
+        return '';
+    }
+
+    $clean = trim($text);
+    if ($clean === '') {
+        return '';
+    }
+
+    if (text_width($font, $size, $clean) <= $maxWidth) {
+        return $clean;
+    }
+
+    $ellipsis = '...';
+    $chars = preg_split('//u', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    while (!empty($chars)) {
+        array_pop($chars);
+        $candidate = rtrim(implode('', $chars));
+        if ($candidate === '') {
+            return $ellipsis;
+        }
+        if (text_width($font, $size, $candidate . $ellipsis) <= $maxWidth) {
+            return $candidate . $ellipsis;
+        }
+    }
+
+    return $ellipsis;
 }
 
 function make_qr_image(string $text): GdImage
@@ -130,10 +197,31 @@ function fit_text_size(string $font, string $text, int $maxWidth, int $startSize
     return $size;
 }
 
+function force_monochrome(GdImage $image, int $threshold = 190): void
+{
+    $w = imagesx($image);
+    $h = imagesy($image);
+    $white = imagecolorallocate($image, 255, 255, 255);
+    $black = imagecolorallocate($image, 0, 0, 0);
+
+    for ($y = 0; $y < $h; $y++) {
+        for ($x = 0; $x < $w; $x++) {
+            $rgb = imagecolorat($image, $x, $y);
+            $r = ($rgb >> 16) & 0xFF;
+            $g = ($rgb >> 8) & 0xFF;
+            $b = $rgb & 0xFF;
+            $luma = (int)round(($r * 0.299) + ($g * 0.587) + ($b * 0.114));
+            imagesetpixel($image, $x, $y, $luma >= $threshold ? $white : $black);
+        }
+    }
+}
+
 function draw_label(array $participant): string
 {
-    $font = get_font_path();
-    if ($font === null) {
+    $fonts = get_label_fonts();
+    $fontRegular = $fonts['regular'];
+    $fontBold = $fonts['bold'];
+    if (!is_string($fontRegular) || $fontRegular === '' || !is_string($fontBold) || $fontBold === '') {
         throw new RuntimeException('font_not_found');
     }
 
@@ -142,25 +230,39 @@ function draw_label(array $participant): string
         throw new RuntimeException('label_allocate_failed');
     }
 
+    imagealphablending($label, true);
+    imagesavealpha($label, false);
+
     $white = imagecolorallocate($label, 255, 255, 255);
     $black = imagecolorallocate($label, 0, 0, 0);
     $gray = imagecolorallocate($label, 90, 90, 90);
 
     imagefilledrectangle($label, 0, 0, LABEL_WIDTH, LABEL_HEIGHT, $white);
 
-    $qrSize = LABEL_HEIGHT - (LABEL_PADDING * 2);
+    // Give text more room by slightly reducing QR size and centering it vertically.
+    $qrSize = min(LABEL_HEIGHT - (LABEL_PADDING * 2), 356);
     $qrX = LABEL_WIDTH - LABEL_PADDING - $qrSize;
-    $qrY = LABEL_PADDING;
+    $qrY = (int)floor((LABEL_HEIGHT - $qrSize) / 2);
     $textX = LABEL_PADDING;
     $textW = $qrX - LABEL_GAP - LABEL_PADDING;
 
-    // Large section marker fills the left header zone and makes the print use the full label visually.
-    imagefilledrectangle($label, $textX, LABEL_PADDING, $qrX - LABEL_GAP, LABEL_PADDING + 110, $black);
     $headerText = 'GENERELL OPPBEVARING';
-    $headerSize = fit_text_size($font, $headerText, $textW - 24, 44, 28);
-    imagettftext($label, $headerSize, 0, $textX + 12, LABEL_PADDING + 78, $white, $font, $headerText);
+    $headerSize = fit_text_size($fontBold, $headerText, $textW, 36, 18);
+    $headerLines = wrap_lines($fontBold, $headerSize, $headerText, $textW, 2);
+    $y = LABEL_PADDING + 34;
+    $headerLineHeight = max(18, (int)round($headerSize * 1.2));
+
+    foreach ($headerLines as $line) {
+        if (trim($line) === '') {
+            continue;
+        }
+        $safeLine = clip_text_to_width($fontBold, $headerSize, $line, $textW);
+        imagettftext($label, $headerSize, 0, $textX, $y, $black, $fontBold, $safeLine);
+        $y += $headerLineHeight;
+    }
 
     $qr = make_qr_image((string)$participant['qr_code']);
+
     $scaledQr = imagecreatetruecolor($qrSize, $qrSize);
     if (!$scaledQr) {
         imagedestroy($label);
@@ -169,7 +271,8 @@ function draw_label(array $participant): string
     }
 
     imagefilledrectangle($scaledQr, 0, 0, $qrSize, $qrSize, $white);
-    imagecopyresampled($scaledQr, $qr, 0, 0, 0, 0, $qrSize, $qrSize, imagesx($qr), imagesy($qr));
+    // Keep modules crisp to avoid dithering artifacts on thermal label printers.
+    imagecopyresized($scaledQr, $qr, 0, 0, 0, 0, $qrSize, $qrSize, imagesx($qr), imagesy($qr));
     imagedestroy($qr);
 
     imagecopy($label, $scaledQr, $qrX, $qrY, 0, 0, $qrSize, $qrSize);
@@ -179,30 +282,61 @@ function draw_label(array $participant): string
     $phone = trim((string)($participant['phone_number'] ?? ''));
     $phoneLine = $phone !== '' ? $phone : '-';
 
-    $labelSize = 32;
-    $nameSize = 70;
-    $valueSize = 60;
+    $labelSize = 20;
+    $valueSize = 32;
 
-    $y = LABEL_PADDING + 148;
-    imagettftext($label, $labelSize, 0, $textX, $y, $gray, $font, 'NAVN');
-    // Extra breathing room between field label and value improves readability.
-    $y += 92;
+    $y += 12;
+    imagettftext($label, $labelSize, 0, $textX, $y, $gray, $fontRegular, 'NAVN');
+    $nameTopY = $y + 64;
 
-    $nameLines = wrap_lines($font, $nameSize, $name, $textW, 2);
-    foreach ($nameLines as $line) {
-        imagettftext($label, $nameSize, 0, $textX, $y, $black, $font, $line);
-        $y += 76;
+    // Anchor phone block to the lower text area so it always stays inside the label.
+    $phoneLabelY = LABEL_HEIGHT - 124;
+    $phoneValueY = LABEL_HEIGHT - 74;
+    $availableNameHeight = max(24, $phoneLabelY - $nameTopY - 8);
+
+    $nameSize = fit_text_size($fontBold, $name, $textW, 42, 16);
+    $nameLines = wrap_lines($fontBold, $nameSize, $name, $textW, 2);
+    $nameLineHeight = max(20, (int)round($nameSize * 1.12));
+
+    while ($nameSize > 16) {
+        $lineCount = 0;
+        foreach ($nameLines as $line) {
+            if (trim($line) !== '') {
+                $lineCount++;
+            }
+        }
+        if (($lineCount * $nameLineHeight) <= $availableNameHeight) {
+            break;
+        }
+
+        $nameSize--;
+        $nameLines = wrap_lines($fontBold, $nameSize, $name, $textW, 2);
+        $nameLineHeight = max(20, (int)round($nameSize * 1.12));
     }
 
-    $y += 10;
-    imagettftext($label, $labelSize, 0, $textX, $y, $gray, $font, 'TELEFON');
-    $y += 70;
-    imagettftext($label, $valueSize, 0, $textX, $y, $black, $font, $phoneLine);
+    $y = $nameTopY;
+    foreach ($nameLines as $line) {
+        if (trim($line) === '') {
+            continue;
+        }
+        $safeLine = clip_text_to_width($fontBold, $nameSize, $line, $textW);
+        imagettftext($label, $nameSize, 0, $textX, $y, $black, $fontBold, $safeLine);
+        $y += $nameLineHeight;
+    }
 
-    // Bottom black stripe gives high contrast and ensures the lower area is used.
-    $stripeTop = LABEL_HEIGHT - 88;
-    imagefilledrectangle($label, 0, $stripeTop, LABEL_WIDTH, LABEL_HEIGHT, $black);
-    imagettftext($label, $labelSize, 0, $textX, $stripeTop + 54, $white, $font, 'QR: ' . (string)$participant['qr_code']);
+    $phoneLabel = clip_text_to_width($fontRegular, $labelSize, 'TELEFON', $textW);
+    imagettftext($label, $labelSize, 0, $textX, $phoneLabelY, $gray, $fontRegular, $phoneLabel);
+
+    $phoneSize = fit_text_size($fontBold, $phoneLine, $textW, $valueSize, 14);
+    $safePhone = clip_text_to_width($fontBold, $phoneSize, $phoneLine, $textW);
+    imagettftext($label, $phoneSize, 0, $textX, $phoneValueY, $black, $fontBold, $safePhone);
+
+    $qrLineSize = fit_text_size($fontRegular, 'QR: ' . (string)$participant['qr_code'], $textW, 17, 10);
+    $safeQrLine = clip_text_to_width($fontRegular, $qrLineSize, 'QR: ' . (string)$participant['qr_code'], $textW);
+    imagettftext($label, $qrLineSize, 0, $textX, LABEL_HEIGHT - 12, $black, $fontRegular, $safeQrLine);
+
+    // Force pure black/white output so the printer doesn't create colored/halftone artifacts.
+    force_monochrome($label, 188);
 
     $tmp = tempnam(sys_get_temp_dir(), 'mobilhotell-label-');
     if ($tmp === false) {
@@ -225,6 +359,89 @@ function draw_label(array $participant): string
 
 function print_label_file(string $path): void
 {
+    $backend = trim((string)getenv('MOBILHOTELL_LABEL_BACKEND'));
+    if ($backend === '') {
+        $backend = DEFAULT_LABEL_BACKEND;
+    }
+
+    if ($backend === 'brother_ql') {
+        $printer = trim((string)getenv('MOBILHOTELL_LABEL_PRINTER'));
+        if ($printer === '') {
+            $printer = trim((string)getenv('MOBILHOTELL_PRINTER'));
+        }
+        if ($printer === '') {
+            $printer = 'QL800';
+        }
+
+        $model = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_MODEL'));
+        if ($model === '') {
+            $model = 'QL-800';
+        }
+
+        $label = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_LABEL'));
+        if ($label === '') {
+            // brother_ql uses 39x90 identifier for DK-11208 class labels.
+            $label = '39x90';
+        }
+
+        $rotate = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_ROTATE'));
+        if ($rotate === '') {
+            $rotate = '90';
+        }
+
+        $useRed = strtolower(trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_RED')));
+        if ($useRed === '') {
+            $useRed = '0';
+        }
+
+        $tmpBin = tempnam(sys_get_temp_dir(), 'mobilhotell-qlraw-');
+        if ($tmpBin === false) {
+            throw new RuntimeException('tempfile_failed');
+        }
+        $binPath = $tmpBin . '.bin';
+        rename($tmpBin, $binPath);
+
+        $parts = ['python3', '-m', 'brother_ql.brother_ql_create', '-m', $model, '-s', $label, '-r', $rotate, '--compress'];
+
+        if (in_array($useRed, ['1', 'true', 'yes', 'on'], true)) {
+            $parts[] = '--red';
+        }
+
+        $parts[] = $path;
+        $parts[] = $binPath;
+
+        $cmd = '';
+        foreach ($parts as $part) {
+            $cmd .= ($cmd === '' ? '' : ' ') . escapeshellarg($part);
+        }
+
+        $out = [];
+        $exit = 0;
+        exec($cmd . ' 2>&1', $out, $exit);
+
+        if ($exit !== 0) {
+            @unlink($binPath);
+            throw new RuntimeException('label_print_failed: ' . implode(' | ', $out));
+        }
+
+        $lpParts = ['lp', '-d', $printer, '-o', 'raw', $binPath];
+        $lpCmd = '';
+        foreach ($lpParts as $part) {
+            $lpCmd .= ($lpCmd === '' ? '' : ' ') . escapeshellarg($part);
+        }
+
+        $lpOut = [];
+        $lpExit = 0;
+        exec($lpCmd . ' 2>&1', $lpOut, $lpExit);
+        @unlink($binPath);
+
+        if ($lpExit !== 0) {
+            throw new RuntimeException('label_print_failed: ' . implode(' | ', $lpOut));
+        }
+
+        return;
+    }
+
     $printer = trim((string)getenv('MOBILHOTELL_LABEL_PRINTER'));
     if ($printer === '') {
         $printer = trim((string)getenv('MOBILHOTELL_PRINTER'));
@@ -238,19 +455,82 @@ function print_label_file(string $path): void
         $media = DEFAULT_LABEL_MEDIA;
     }
 
-    $parts = [
-        'lp',
-        '-d',
-        $printer,
-        '-o',
-        'media=' . $media,
-        '-o',
-        'orientation-requested=4',
-        '-o',
-        'scaling=100',
-        '-o',
-        'fit-to-page',
-    ];
+    $mediaType = trim((string)getenv('MOBILHOTELL_LABEL_MEDIA_TYPE'));
+    if ($mediaType === '') {
+        $mediaType = DEFAULT_LABEL_MEDIA_TYPE;
+    }
+
+    $pageSize = trim((string)getenv('MOBILHOTELL_LABEL_PAGE_SIZE'));
+    if ($pageSize === '') {
+        $pageSize = DEFAULT_LABEL_PAGE_SIZE;
+    }
+
+    $autoCut = trim((string)getenv('MOBILHOTELL_LABEL_AUTO_CUT'));
+    if ($autoCut === '') {
+        $autoCut = DEFAULT_LABEL_AUTO_CUT;
+    }
+
+    $autoEject = trim((string)getenv('MOBILHOTELL_LABEL_AUTO_EJECT'));
+    if ($autoEject === '') {
+        $autoEject = DEFAULT_LABEL_AUTO_EJECT;
+    }
+
+    $orientation = trim((string)getenv('MOBILHOTELL_LABEL_ORIENTATION'));
+    if ($orientation === '') {
+        $orientation = DEFAULT_LABEL_ORIENTATION;
+    }
+
+    $scaling = trim((string)getenv('MOBILHOTELL_LABEL_SCALING'));
+    if ($scaling === '') {
+        $scaling = DEFAULT_LABEL_SCALING;
+    }
+
+    $fitToPage = trim((string)getenv('MOBILHOTELL_LABEL_FIT_TO_PAGE'));
+    if ($fitToPage === '') {
+        $fitToPage = DEFAULT_LABEL_FIT_TO_PAGE;
+    }
+
+    $parts = ['lp', '-d', $printer];
+
+    if ($media !== '') {
+        $parts[] = '-o';
+        $parts[] = 'media=' . $media;
+    }
+
+    if ($mediaType !== '') {
+        $parts[] = '-o';
+        $parts[] = 'MediaType=' . $mediaType;
+    }
+
+    if ($pageSize !== '') {
+        $parts[] = '-o';
+        $parts[] = 'PageSize=' . $pageSize;
+    }
+
+    if ($autoCut !== '') {
+        $parts[] = '-o';
+        $parts[] = 'AutoCut=' . $autoCut;
+    }
+
+    if ($autoEject !== '') {
+        $parts[] = '-o';
+        $parts[] = 'AutoEject=' . $autoEject;
+    }
+
+    if ($orientation !== '') {
+        $parts[] = '-o';
+        $parts[] = 'orientation-requested=' . $orientation;
+    }
+
+    if ($scaling !== '') {
+        $parts[] = '-o';
+        $parts[] = 'scaling=' . $scaling;
+    }
+
+    if ($fitToPage !== '') {
+        $parts[] = '-o';
+        $parts[] = $fitToPage;
+    }
 
     $parts[] = $path;
 

@@ -24,6 +24,7 @@ function fail(string $error): void
 $pdo = db();
 $qr = normalize_qr((string)($_GET['qr'] ?? ''));
 $participantId = (int)($_GET['participant_id'] ?? 0);
+$dryRun = isset($_GET['dry_run']) && (string)$_GET['dry_run'] !== '' && (string)$_GET['dry_run'] !== '0';
 
 if ($qr === '' && $participantId <= 0) {
     fail('missing_identifier');
@@ -33,10 +34,10 @@ try {
     $pdo->beginTransaction();
 
     if ($participantId > 0) {
-        $pStmt = $pdo->prepare('SELECT id, qr_code, first_name, last_name FROM participants WHERE id = ? LIMIT 1');
+        $pStmt = $pdo->prepare('SELECT id, qr_code, first_name, last_name, phone_number, county, participant_type, image_path FROM participants WHERE id = ? LIMIT 1');
         $pStmt->execute([$participantId]);
     } else {
-        $pStmt = $pdo->prepare('SELECT id, qr_code, first_name, last_name FROM participants WHERE qr_code = ? LIMIT 1');
+        $pStmt = $pdo->prepare('SELECT id, qr_code, first_name, last_name, phone_number, county, participant_type, image_path FROM participants WHERE qr_code = ? LIMIT 1');
         $pStmt->execute([$qr]);
     }
 
@@ -56,10 +57,38 @@ try {
     $action = 'checked_in';
     $periodSeconds = 0;
     $storageSessionId = 0;
+    $imagePath = trim((string)($participant['image_path'] ?? ''));
+    if ($imagePath === '') {
+        $imagePath = 'images/default.png';
+    }
 
     if ($active) {
         $action = 'checked_out';
         $storageSessionId = (int)$active['id'];
+    }
+
+    if ($dryRun) {
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'dry_run' => true,
+            'action' => $action,
+            'storage_session_id' => $storageSessionId,
+            'participant_id' => (int)$participant['id'],
+            'name' => trim((string)$participant['first_name'] . ' ' . (string)$participant['last_name']),
+            'qr' => (string)$participant['qr_code'],
+            'phone_number' => (string)($participant['phone_number'] ?? ''),
+            'county' => (string)($participant['county'] ?? ''),
+            'type' => (string)($participant['participant_type'] ?? ''),
+            'image' => $imagePath,
+            'period_seconds' => 0,
+            'total_seconds' => 0,
+        ]);
+        exit;
+    }
+
+    if ($active) {
         $update = $pdo->prepare("UPDATE storage_sessions
             SET checkout_time = NOW(), status = 'checked_out'
             WHERE id = ? AND status = 'checked_in'");
@@ -109,6 +138,9 @@ try {
         'name' => trim((string)$participant['first_name'] . ' ' . (string)$participant['last_name']),
         'qr' => (string)$participant['qr_code'],
         'phone_number' => (string)($participant['phone_number'] ?? ''),
+        'county' => (string)($participant['county'] ?? ''),
+        'type' => (string)($participant['participant_type'] ?? ''),
+        'image' => $imagePath,
         'period_seconds' => $periodSeconds,
         'total_seconds' => $totalSeconds,
     ]);
