@@ -3,3 +3,13 @@ images/*
 !images/.gitkeep
 data/*.sqlite
 data/*.sqlite-*
+assets/TWKBurns-Black.ttf
+assets/TWKBurns-Regular.ttf
+assets/TWKBurns-Ultra.ttf
+.gitignore
+deltakere_qr_oversikt.pdf
+ALLE INVOLVERTE.csv
+.gitignore
+indesign_import_2026_20260608_092940.csv
+indesign_import_2026_20260603_213204.csv
+assets/Inter-VariableFont_opsz,wght.ttf
