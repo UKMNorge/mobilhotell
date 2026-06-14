@@ -475,6 +475,65 @@ function allow_cups_fallback(): bool
     return !in_array($value, ['0', 'false', 'no', 'off'], true);
 }
 
+function label_forward_url(): string
+{
+    return trim((string)getenv('MOBILHOTELL_LABEL_FORWARD_URL'));
+}
+
+function maybe_forward_label_print(int $storageSessionId): ?array
+{
+    $baseUrl = label_forward_url();
+    if ($baseUrl === '') {
+        return null;
+    }
+
+    if ((string)($_GET['_forwarded'] ?? '') === '1') {
+        return null;
+    }
+
+    $separator = str_contains($baseUrl, '?') ? '&' : '?';
+    $url = $baseUrl
+        . $separator
+        . 'storage_session_id=' . rawurlencode((string)$storageSessionId)
+        . '&_ts=' . rawurlencode((string)time())
+        . '&_forwarded=1';
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => 12,
+            'ignore_errors' => true,
+            'header' => "Accept: application/json\r\n",
+        ],
+    ]);
+
+    $raw = @file_get_contents($url, false, $context);
+    if ($raw === false) {
+        throw new RuntimeException('label_forward_failed: request_failed');
+    }
+
+    $status = 0;
+    foreach ($http_response_header ?? [] as $headerLine) {
+        if (preg_match('/^HTTP\/\S+\s+(\d{3})\b/', $headerLine, $m) === 1) {
+            $status = (int)$m[1];
+            break;
+        }
+    }
+
+    $payload = json_decode($raw, true);
+    if (!is_array($payload)) {
+        throw new RuntimeException('label_forward_failed: invalid_json');
+    }
+
+    $ok = !empty($payload['success']);
+    if ($status >= 400 || !$ok) {
+        $detail = (string)($payload['detail'] ?? $payload['error'] ?? 'remote_error');
+        throw new RuntimeException('label_forward_failed: ' . $detail);
+    }
+
+    return $payload;
+}
+
 function print_label_file(string $path): void
 {
     $backend = trim((string)getenv('MOBILHOTELL_LABEL_BACKEND'));
@@ -578,6 +637,20 @@ $storageSessionId = (int)($_GET['storage_session_id'] ?? 0);
 
 if ($storageSessionId <= 0) {
     out(['success' => false, 'error' => 'missing_storage_session_id'], 400);
+}
+
+try {
+    $forwarded = maybe_forward_label_print($storageSessionId);
+    if (is_array($forwarded)) {
+        out([
+            'success' => true,
+            'storage_session_id' => (int)($forwarded['storage_session_id'] ?? $storageSessionId),
+            'participant_id' => (int)($forwarded['participant_id'] ?? 0),
+            'forwarded' => true,
+        ]);
+    }
+} catch (Throwable $e) {
+    out(['success' => false, 'error' => 'forward_failed', 'detail' => $e->getMessage()], 502);
 }
 
 $stmt = $pdo->prepare("SELECT p.id AS participant_id, p.first_name, p.last_name, p.qr_code, p.phone_number

@@ -411,6 +411,26 @@ lpstat -W all -o Brother-QL-800 | tail -n 3
 
 Na vil valg av `Skriv ut etikett` paa klient-PC sende jobben til Brother-skriveren paa hoved-PC.
 
+### 4c. Anbefalt fallback: videresend etikettkall fra klient til hoved-PC
+
+Hvis klienten fortsatt gir feilmating/rod lampe selv om jobb dukker opp i CUPS, kan klienten
+videresende etikett-endepunktet direkte til hoved-PC (som bruker lokal, fungerende driversti).
+
+Kjor paa klient-PC:
+
+```bash
+sudo tee /etc/apache2/conf-available/mobilhotell-label.conf >/dev/null <<'EOF'
+SetEnv MOBILHOTELL_LABEL_FORWARD_URL http://10.10.10.1/print_storage_label.php
+SetEnv MOBILHOTELL_LABEL_PRINTER MH-QL800-remote
+SetEnv MOBILHOTELL_LABEL_BACKEND cups
+SetEnv MOBILHOTELL_LABEL_ALLOW_CUPS_FALLBACK 1
+EOF
+sudo a2enconf mobilhotell-label
+sudo systemctl restart apache2
+```
+
+Ved vellykket kall vil responsen inneholde `"forwarded": true`.
+
 ### 5. Verifiser samtidig innsjekk
 
 - Aapne kiosk paa begge maskiner
