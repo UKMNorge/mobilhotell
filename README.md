@@ -395,14 +395,12 @@ Sett etikett-ko paa klient-PC i Apache-miljoet:
 
 ```bash
 echo 'SetEnv MOBILHOTELL_LABEL_PRINTER Brother-QL-800' | sudo tee /etc/apache2/conf-available/mobilhotell-label.conf
-echo 'SetEnv MOBILHOTELL_LABEL_BACKEND brother_ql' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
-echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_MODEL QL-800' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
-echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_LABEL 39x90' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
-echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_ROTATE 0' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
-echo 'SetEnv MOBILHOTELL_LABEL_BROTHER_RED 0' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
+echo 'SetEnv MOBILHOTELL_LABEL_BACKEND cups' | sudo tee -a /etc/apache2/conf-available/mobilhotell-label.conf
 sudo a2enconf mobilhotell-label
 sudo systemctl restart apache2
 ```
+
+Merk: Hvis klient allerede er satt med `MOBILHOTELL_LABEL_BACKEND brother_ql`, vil appen naa automatisk falle tilbake til CUPS hvis `brother_ql` feiler (kan skrus av med `SetEnv MOBILHOTELL_LABEL_ALLOW_CUPS_FALLBACK 0`).
 
 Test fra klient-PC:
 

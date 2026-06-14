@@ -357,91 +357,8 @@ function draw_label(array $participant): string
     return $pngPath;
 }
 
-function print_label_file(string $path): void
+function cups_print_label_file(string $path): void
 {
-    $backend = trim((string)getenv('MOBILHOTELL_LABEL_BACKEND'));
-    if ($backend === '') {
-        $backend = DEFAULT_LABEL_BACKEND;
-    }
-
-    if ($backend === 'brother_ql') {
-        $printer = trim((string)getenv('MOBILHOTELL_LABEL_PRINTER'));
-        if ($printer === '') {
-            $printer = trim((string)getenv('MOBILHOTELL_PRINTER'));
-        }
-        if ($printer === '') {
-            $printer = 'QL800';
-        }
-
-        $model = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_MODEL'));
-        if ($model === '') {
-            $model = 'QL-800';
-        }
-
-        $label = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_LABEL'));
-        if ($label === '') {
-            // brother_ql uses 39x90 identifier for DK-11208 class labels.
-            $label = '39x90';
-        }
-
-        $rotate = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_ROTATE'));
-        if ($rotate === '') {
-            $rotate = '90';
-        }
-
-        $useRed = strtolower(trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_RED')));
-        if ($useRed === '') {
-            $useRed = '0';
-        }
-
-        $tmpBin = tempnam(sys_get_temp_dir(), 'mobilhotell-qlraw-');
-        if ($tmpBin === false) {
-            throw new RuntimeException('tempfile_failed');
-        }
-        $binPath = $tmpBin . '.bin';
-        rename($tmpBin, $binPath);
-
-        $parts = ['python3', '-m', 'brother_ql.brother_ql_create', '-m', $model, '-s', $label, '-r', $rotate, '--compress'];
-
-        if (in_array($useRed, ['1', 'true', 'yes', 'on'], true)) {
-            $parts[] = '--red';
-        }
-
-        $parts[] = $path;
-        $parts[] = $binPath;
-
-        $cmd = '';
-        foreach ($parts as $part) {
-            $cmd .= ($cmd === '' ? '' : ' ') . escapeshellarg($part);
-        }
-
-        $out = [];
-        $exit = 0;
-        exec($cmd . ' 2>&1', $out, $exit);
-
-        if ($exit !== 0) {
-            @unlink($binPath);
-            throw new RuntimeException('label_print_failed: ' . implode(' | ', $out));
-        }
-
-        $lpParts = ['lp', '-d', $printer, '-o', 'raw', $binPath];
-        $lpCmd = '';
-        foreach ($lpParts as $part) {
-            $lpCmd .= ($lpCmd === '' ? '' : ' ') . escapeshellarg($part);
-        }
-
-        $lpOut = [];
-        $lpExit = 0;
-        exec($lpCmd . ' 2>&1', $lpOut, $lpExit);
-        @unlink($binPath);
-
-        if ($lpExit !== 0) {
-            throw new RuntimeException('label_print_failed: ' . implode(' | ', $lpOut));
-        }
-
-        return;
-    }
-
     $printer = trim((string)getenv('MOBILHOTELL_LABEL_PRINTER'));
     if ($printer === '') {
         $printer = trim((string)getenv('MOBILHOTELL_PRINTER'));
@@ -546,6 +463,114 @@ function print_label_file(string $path): void
     if ($exit !== 0) {
         throw new RuntimeException('label_print_failed: ' . implode(' | ', $out));
     }
+}
+
+function allow_cups_fallback(): bool
+{
+    $value = strtolower(trim((string)getenv('MOBILHOTELL_LABEL_ALLOW_CUPS_FALLBACK')));
+    if ($value === '') {
+        return true;
+    }
+
+    return !in_array($value, ['0', 'false', 'no', 'off'], true);
+}
+
+function print_label_file(string $path): void
+{
+    $backend = trim((string)getenv('MOBILHOTELL_LABEL_BACKEND'));
+    if ($backend === '') {
+        $backend = DEFAULT_LABEL_BACKEND;
+    }
+
+    if ($backend === 'brother_ql') {
+        $printer = trim((string)getenv('MOBILHOTELL_LABEL_PRINTER'));
+        if ($printer === '') {
+            $printer = trim((string)getenv('MOBILHOTELL_PRINTER'));
+        }
+        if ($printer === '') {
+            $printer = 'QL800';
+        }
+
+        $model = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_MODEL'));
+        if ($model === '') {
+            $model = 'QL-800';
+        }
+
+        $label = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_LABEL'));
+        if ($label === '') {
+            // brother_ql uses 39x90 identifier for DK-11208 class labels.
+            $label = '39x90';
+        }
+
+        $rotate = trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_ROTATE'));
+        if ($rotate === '') {
+            $rotate = '90';
+        }
+
+        $useRed = strtolower(trim((string)getenv('MOBILHOTELL_LABEL_BROTHER_RED')));
+        if ($useRed === '') {
+            $useRed = '0';
+        }
+
+        $tmpBin = tempnam(sys_get_temp_dir(), 'mobilhotell-qlraw-');
+        if ($tmpBin === false) {
+            throw new RuntimeException('tempfile_failed');
+        }
+        $binPath = $tmpBin . '.bin';
+        rename($tmpBin, $binPath);
+
+        $parts = ['python3', '-m', 'brother_ql.brother_ql_create', '-m', $model, '-s', $label, '-r', $rotate, '--compress'];
+
+        if (in_array($useRed, ['1', 'true', 'yes', 'on'], true)) {
+            $parts[] = '--red';
+        }
+
+        $parts[] = $path;
+        $parts[] = $binPath;
+
+        $cmd = '';
+        foreach ($parts as $part) {
+            $cmd .= ($cmd === '' ? '' : ' ') . escapeshellarg($part);
+        }
+
+        try {
+            $out = [];
+            $exit = 0;
+            exec($cmd . ' 2>&1', $out, $exit);
+
+            if ($exit !== 0) {
+                throw new RuntimeException('label_print_failed: ' . implode(' | ', $out));
+            }
+
+            $lpParts = ['lp', '-d', $printer, '-o', 'raw', $binPath];
+            $lpCmd = '';
+            foreach ($lpParts as $part) {
+                $lpCmd .= ($lpCmd === '' ? '' : ' ') . escapeshellarg($part);
+            }
+
+            $lpOut = [];
+            $lpExit = 0;
+            exec($lpCmd . ' 2>&1', $lpOut, $lpExit);
+
+            if ($lpExit !== 0) {
+                throw new RuntimeException('label_print_failed: ' . implode(' | ', $lpOut));
+            }
+
+            @unlink($binPath);
+            return;
+        } catch (Throwable $e) {
+            @unlink($binPath);
+            if (!allow_cups_fallback()) {
+                throw $e;
+            }
+
+            // On clients, brother_ql may be unavailable while a shared CUPS queue still works.
+            cups_print_label_file($path);
+            return;
+        }
+    }
+
+    cups_print_label_file($path);
 }
 
 $pdo = db();
