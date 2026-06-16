@@ -43,7 +43,8 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
 #eventLog table { font-size: 16px; }
 .inline-form { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 #gridStorage,
-#gridCharging { max-height: 320px; overflow: auto; padding: 6px; background: #f6faf6; border-radius: 10px; border: 1px solid #dfe7df; }
+#gridChargingA,
+#gridChargingC { max-height: 320px; overflow: auto; padding: 6px; background: #f6faf6; border-radius: 10px; border: 1px solid #dfe7df; }
 .view-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
 .view-toggle { background: #ecefec; color: #17332f; font-weight: 700; }
 .view-toggle.active { background: #056256; color: #fff; }
@@ -185,10 +186,12 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
 
   <section id="panelSlots" class="panel" hidden>
     <h2>Slots</h2>
-    <h3>Oppbevaring</h3>
+    <h3>Oppbevaring (O001-O180)</h3>
     <div id="gridStorage" class="grid"></div>
-    <h3>Lading</h3>
-    <div id="gridCharging" class="grid"></div>
+    <h3>Lading USB-A (A001-A060)</h3>
+    <div id="gridChargingA" class="grid"></div>
+    <h3>Lading USB-C (C001-C120)</h3>
+    <div id="gridChargingC" class="grid"></div>
   </section>
 
   <section id="panelImport" class="panel" hidden>
@@ -219,7 +222,8 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   const autoBtn = document.getElementById('auto');
   const activeBody = document.getElementById('activeBody');
   const gridStorage = document.getElementById('gridStorage');
-  const gridCharging = document.getElementById('gridCharging');
+  const gridChargingA = document.getElementById('gridChargingA');
+  const gridChargingC = document.getElementById('gridChargingC');
   const message = document.getElementById('message');
   const health = document.getElementById('health');
   const eventLog = document.getElementById('eventLog');
@@ -329,7 +333,11 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     return status || '-';
   }
 
-  function typeNo(type) {
+  function typeNo(type, slotNumber) {
+    const slot = String(slotNumber || '').toUpperCase();
+    if (slot.startsWith('O')) return 'Oppbevaring';
+    if (slot.startsWith('A')) return 'Lading USB-A';
+    if (slot.startsWith('C')) return 'Lading USB-C';
     if (type === 'storage') return 'Oppbevaring';
     if (type === 'charging') return 'Lading';
     return type || '-';
@@ -419,7 +427,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
       + '<td>' + esc(it.name) + '</td>'
       + '<td>' + esc(it.qr_code) + '</td>'
       + '<td>' + esc(it.slot_number) + '</td>'
-      + '<td>' + esc(typeNo(it.slot_type)) + '</td>'
+      + '<td>' + esc(typeNo(it.slot_type, it.slot_number)) + '</td>'
       + '<td>' + esc(it.checkin_time) + '</td>'
       + '<td><button class="danger" data-out="' + Number(it.session_id) + '">Utlever</button> '
       + '<button class="warn" data-down="' + Number(it.slot_id) + '">Ute av drift</button></td>'
@@ -434,8 +442,9 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     const render = (slot) => '<button class="slot ' + esc(slot.status) + '" data-slot="' + esc(slot.slot_number) + '">'
       + esc(slot.slot_number) + '<small>' + esc(slot.name || 'ledig') + '</small></button>';
 
-    gridStorage.innerHTML = items.filter(i => i.slot_type === 'storage').map(render).join('');
-    gridCharging.innerHTML = items.filter(i => i.slot_type === 'charging').map(render).join('');
+    gridStorage.innerHTML = items.filter(i => String(i.slot_number || '').toUpperCase().startsWith('O')).map(render).join('');
+    gridChargingA.innerHTML = items.filter(i => String(i.slot_number || '').toUpperCase().startsWith('A')).map(render).join('');
+    gridChargingC.innerHTML = items.filter(i => String(i.slot_number || '').toUpperCase().startsWith('C')).map(render).join('');
   }
 
   async function loadScreentime(force = false) {
@@ -495,6 +504,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
       const active = Number(s.is_active) === 1;
       const html = '<div style="padding:10px; background:#eef2ee; border-radius:8px">'
         + '<div><strong>Slot:</strong> ' + esc(s.slot_number) + '</div>'
+        + '<div><strong>Type:</strong> ' + esc(typeNo(s.slot_type, s.slot_number)) + '</div>'
         + '<div><strong>Status:</strong> ' + esc(statusNo(s.status)) + '</div>'
         + '<div><strong>Deltaker:</strong> ' + esc(s.name || 'Ingen') + '</div>'
         + '<div style="margin-top:8px">'

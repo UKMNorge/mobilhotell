@@ -288,6 +288,12 @@ function initialize_schema(PDO $pdo): void
         $pdo->exec("ALTER TABLE participants
             ADD COLUMN IF NOT EXISTS phone_number VARCHAR(32) NOT NULL DEFAULT '' AFTER last_name");
         mark_schema_version($pdo, 7);
+        $version = 7;
+    }
+
+    if ($version < 8) {
+        normalize_slot_numbering($pdo);
+        mark_schema_version($pdo, 8);
     }
 }
 
@@ -320,6 +326,63 @@ function ensure_slot_capacity(PDO $pdo, string $slotType, string $prefix, int $t
     for ($n = $maxNumber + 1; $existingCount < $targetCount; $n++, $existingCount++) {
         $slotNumber = $prefix . str_pad((string)$n, 3, '0', STR_PAD_LEFT);
         $insertStmt->execute([$slotNumber, $slotType]);
+    }
+}
+
+function normalize_slot_numbering(PDO $pdo): void
+{
+    $pdo->beginTransaction();
+    try {
+        ensure_slot_capacity($pdo, 'storage', 'O', 180);
+        ensure_slot_capacity($pdo, 'charging', 'C', 180);
+
+        $storageRows = $pdo->query("SELECT id
+            FROM slots
+            WHERE slot_type = 'storage'
+            ORDER BY CAST(SUBSTR(slot_number, 2) AS UNSIGNED) ASC, id ASC")->fetchAll();
+        $chargingRows = $pdo->query("SELECT id
+            FROM slots
+            WHERE slot_type = 'charging'
+            ORDER BY CAST(SUBSTR(slot_number, 2) AS UNSIGNED) ASC, id ASC")->fetchAll();
+
+        $tmpStmt = $pdo->prepare('UPDATE slots SET slot_number = ? WHERE id = ?');
+        $finalStmt = $pdo->prepare('UPDATE slots SET slot_number = ? WHERE id = ?');
+
+        $i = 1;
+        foreach ($storageRows as $row) {
+            $tmpStmt->execute(['TMP_O_' . str_pad((string)$i, 3, '0', STR_PAD_LEFT), (int)$row['id']]);
+            $i++;
+        }
+
+        $j = 1;
+        foreach ($chargingRows as $row) {
+            $tmpStmt->execute(['TMP_C_' . str_pad((string)$j, 3, '0', STR_PAD_LEFT), (int)$row['id']]);
+            $j++;
+        }
+
+        $i = 1;
+        foreach ($storageRows as $row) {
+            $finalStmt->execute(['O' . str_pad((string)$i, 3, '0', STR_PAD_LEFT), (int)$row['id']]);
+            $i++;
+        }
+
+        $index = 1;
+        foreach ($chargingRows as $row) {
+            if ($index <= 60) {
+                $slotNumber = 'A' . str_pad((string)$index, 3, '0', STR_PAD_LEFT);
+            } else {
+                $slotNumber = 'C' . str_pad((string)($index - 60), 3, '0', STR_PAD_LEFT);
+            }
+            $finalStmt->execute([$slotNumber, (int)$row['id']]);
+            $index++;
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
     }
 }
 

@@ -91,6 +91,16 @@ function parse_session_id(array $argv): ?int
     return null;
 }
 
+function format_slot_label(string $slot): string
+{
+    $value = strtoupper(trim($slot));
+    if (preg_match('/^([A-Z])(\d{2,3})$/', $value, $m) !== 1) {
+        return $value;
+    }
+
+    return $m[1] . '-' . str_pad($m[2], 3, '0', STR_PAD_LEFT);
+}
+
 function fetch_receipt_data(PDO $pdo, int $sessionId): ?array
 {
     $stmt = $pdo->prepare(
@@ -116,7 +126,7 @@ function fetch_receipt_data(PDO $pdo, int $sessionId): ?array
     return [
         'name' => trim((string)$row['first_name'] . ' ' . (string)$row['last_name']),
         'qr' => (string)$row['qr_code'],
-        'slot' => (string)$row['slot_number'],
+        'slot' => format_slot_label((string)$row['slot_number']),
         'time' => (string)($row['checkin_time'] ?? ''),
         'type' => ((string)$row['delivery_type'] === 'charging') ? 'Lading' : 'Oppbevaring',
     ];

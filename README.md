@@ -203,6 +203,68 @@ CSV-import støtter naa ogsaa telefonnummer via en av disse kolonnene:
 
 Mobilhotell administreres fortsatt i `admin.php`.
 
+## Synk av images fra master til slave
+
+For at deltakerbilder skal vises ved scan paa slave-maskinen (`mobilhotell`), maa `images/`-mappen synkes fra master (`mobilhotell2`).
+
+### 1. Opprett SSH-nokkel paa slave (mobilhotell)
+
+Kjor paa `mobilhotell` som brukeren som skal kjore `rsync`:
+
+```bash
+ssh-keygen -t ed25519 -C "mobilhotell-image-sync"
+```
+
+Kopier public key til `mobilhotell2` (samme bruker):
+
+```bash
+ssh-copy-id <bruker>@mobilhotell2
+```
+
+Test innlogging uten passord:
+
+```bash
+ssh <bruker>@mobilhotell2 hostname
+```
+
+### 2. Engangssynk (test)
+
+Kjor paa `mobilhotell`:
+
+```bash
+rsync -az --delete <bruker>@mobilhotell2:/var/www/mobilhotell/images/ /var/www/mobilhotell/images/
+```
+
+Sett riktige rettigheter etter sync:
+
+```bash
+sudo chown -R www-data:www-data /var/www/mobilhotell/images
+find /var/www/mobilhotell/images -type d -exec chmod 755 {} \;
+find /var/www/mobilhotell/images -type f -exec chmod 644 {} \;
+```
+
+### 3. Automatisk synk med cron (hvert minutt)
+
+Legg inn cron paa `mobilhotell`:
+
+```bash
+crontab -l 2>/dev/null | { cat; echo '* * * * * rsync -az --delete <bruker>@mobilhotell2:/var/www/mobilhotell/images/ /var/www/mobilhotell/images/ >/tmp/mobilhotell-images-sync.log 2>&1'; } | crontab -
+```
+
+Tips: bytt `<bruker>` til faktisk SSH-bruker. Hvis du vil redusere nettlast, bruk f.eks. `*/5 * * * *` i stedet for hvert minutt.
+
+### 4. Verifiser at bilder er tilgjengelige paa slave
+
+Sjekk at en fil finnes:
+
+```bash
+ls -lah /var/www/mobilhotell/images | head
+```
+
+Og test i nettleser mot slave:
+
+- `http://mobilhotell/images/default.png`
+
 ## Automatisk USB-backup (anbefalt)
 
 Hvis en USB-pinne alltid er montert paa `/mnt/usb`, oppdaterer systemet automatisk

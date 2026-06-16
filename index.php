@@ -308,6 +308,9 @@ p {
   min-height: 102px;
   padding: 22px 24px;
 }
+.participant-actions {
+  grid-template-columns: 1fr;
+}
 .btn-primary { background: #0d8f4a; color: #fff; }
 .btn-warn { background: #f5c84b; color: #111; }
 .error {
@@ -891,7 +894,9 @@ body.showing-card .avatar {
       const c = data.capacity;
       const cards = [
         ['Oppbevaring', c.storage],
-        ['Lading', c.charging],
+        ['Lading USB-A', c.charging_usb_a],
+        ['Lading USB-C', c.charging_usb_c],
+        ['Lading totalt', c.charging],
         ['Totalt', c.overall],
       ];
 
@@ -954,6 +959,13 @@ body.showing-card .avatar {
 
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  }
+
+  function formatSlotLabel(slot) {
+    const value = String(slot || '').trim().toUpperCase();
+    const m = value.match(/^([A-Z])(\d{2,3})$/);
+    if (!m) return value;
+    return m[1] + '-' + m[2].padStart(3, '0');
   }
 
   function resolveImage(path) {
@@ -1175,9 +1187,9 @@ body.showing-card .avatar {
 
     let actions = '';
     if (p.checked_in && p.session_id) {
-      actions = '<div class="slot">' + esc(p.slot) + '</div><button class="btn btn-primary" data-checkout="' + Number(p.session_id) + '">Registrer utlevert</button>';
+      actions = '<div class="slot">' + esc(formatSlotLabel(p.slot)) + '</div><button class="btn btn-primary" data-checkout="' + Number(p.session_id) + '">Registrer utlevert</button>';
     } else {
-      actions = '<div class="action-row participant-actions"><button class="btn btn-primary" data-checkin="storage">Oppbevar Mobil</button><button class="btn btn-warn" data-checkin="charging">Lad Mobil</button></div>';
+      actions = '<div class="action-row participant-actions"><button class="btn btn-primary" data-checkin="storage">Oppbevar Mobil</button><button class="btn btn-warn" data-checkin="charging_usb_a">Lad Mobil USB-A</button><button class="btn btn-warn" data-checkin="charging_usb_c">Lad Mobil USB-C</button></div>';
     }
 
     view.innerHTML = '<div class="card participant-card">'
@@ -1191,11 +1203,13 @@ body.showing-card .avatar {
     hideKeyboard();
 
     const c1 = view.querySelector('[data-checkin="storage"]');
-    const c2 = view.querySelector('[data-checkin="charging"]');
+    const c2 = view.querySelector('[data-checkin="charging_usb_a"]');
+    const c3 = view.querySelector('[data-checkin="charging_usb_c"]');
     const out = view.querySelector('[data-checkout]');
 
     if (c1) c1.addEventListener('click', () => checkin(p.qr, 'storage'));
-    if (c2) c2.addEventListener('click', () => checkin(p.qr, 'charging'));
+    if (c2) c2.addEventListener('click', () => checkin(p.qr, 'charging_usb_a'));
+    if (c3) c3.addEventListener('click', () => checkin(p.qr, 'charging_usb_c'));
     if (out) out.addEventListener('click', () => checkout(Number(out.dataset.checkout)));
   }
 
@@ -1211,11 +1225,13 @@ body.showing-card .avatar {
         return;
       }
 
-      const deliveryType = type === 'charging' ? 'Lading' : 'Oppbevaring';
+      const deliveryType = type === 'charging_usb_a'
+        ? 'Lading USB-A'
+        : (type === 'charging_usb_c' ? 'Lading USB-C' : 'Oppbevaring');
 
       view.innerHTML = '<div class="card receipt-card">'
         + '<div class="receipt-stack">'
-        + '<div class="slot">' + esc(data.slot) + '</div>'
+        + '<div class="slot">' + esc(formatSlotLabel(data.slot)) + '</div>'
         + '<div class="receipt">'
         + '<div class="receipt-head">'
         + '<img class="receipt-logo" src="assets/UKM Logo Sort RGB.png" alt="UKM logo">'
@@ -1227,7 +1243,7 @@ body.showing-card .avatar {
         + '<div class="receipt-grid">'
         + '<div class="receipt-item"><div class="receipt-label">Navn</div><div class="receipt-value">' + esc(data.name) + '</div></div>'
         + '<div class="receipt-item"><div class="receipt-label">Type</div><div class="receipt-value">' + esc(deliveryType) + '</div></div>'
-        + '<div class="receipt-item"><div class="receipt-label">Slot</div><div class="receipt-value">' + esc(data.slot) + '</div></div>'
+        + '<div class="receipt-item"><div class="receipt-label">Slot</div><div class="receipt-value">' + esc(formatSlotLabel(data.slot)) + '</div></div>'
         + '<div class="receipt-item"><div class="receipt-label">Tid</div><div class="receipt-value">' + esc(data.checked_in_at || '') + '</div></div>'
         + '</div>'
         + '<div class="receipt-note"><strong>Ved utlevering:</strong> Scan deltaker-ID og bekreft bilde.</div>'

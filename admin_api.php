@@ -335,19 +335,25 @@ if ($action === 'health' && $method === 'GET') {
 if ($action === 'capacity' && $method === 'GET') {
     $targets = [
         'storage' => 180,
-        'charging' => 120,
+        'charging_usb_a' => 60,
+        'charging_usb_c' => 120,
     ];
 
-    $occupiedStmt = $pdo->query("SELECT s.slot_type, COUNT(*) AS c
+    $occupiedStmt = $pdo->query("SELECT s.slot_number, COUNT(*) AS c
         FROM phone_sessions ps
         JOIN slots s ON s.id = ps.slot_id
         WHERE ps.status = 'checked_in'
-        GROUP BY s.slot_type");
-    $occupiedMap = ['storage' => 0, 'charging' => 0];
+        GROUP BY s.slot_number");
+    $occupiedMap = ['storage' => 0, 'charging_usb_a' => 0, 'charging_usb_c' => 0];
     foreach ($occupiedStmt->fetchAll() as $row) {
-        $t = (string)$row['slot_type'];
-        if (isset($occupiedMap[$t])) {
-            $occupiedMap[$t] = (int)$row['c'];
+        $slotNumber = strtoupper((string)$row['slot_number']);
+        $count = (int)$row['c'];
+        if (str_starts_with($slotNumber, 'O')) {
+            $occupiedMap['storage'] += $count;
+        } elseif (str_starts_with($slotNumber, 'A')) {
+            $occupiedMap['charging_usb_a'] += $count;
+        } elseif (str_starts_with($slotNumber, 'C')) {
+            $occupiedMap['charging_usb_c'] += $count;
         }
     }
 
@@ -372,7 +378,16 @@ if ($action === 'capacity' && $method === 'GET') {
         'success' => true,
         'capacity' => [
             'storage' => $byType['storage'],
-            'charging' => $byType['charging'],
+            'charging_usb_a' => $byType['charging_usb_a'],
+            'charging_usb_c' => $byType['charging_usb_c'],
+            'charging' => [
+                'total' => $byType['charging_usb_a']['total'] + $byType['charging_usb_c']['total'],
+                'occupied' => $byType['charging_usb_a']['occupied'] + $byType['charging_usb_c']['occupied'],
+                'free' => $byType['charging_usb_a']['free'] + $byType['charging_usb_c']['free'],
+                'percent' => ($byType['charging_usb_a']['total'] + $byType['charging_usb_c']['total']) > 0
+                    ? round((($byType['charging_usb_a']['occupied'] + $byType['charging_usb_c']['occupied']) / ($byType['charging_usb_a']['total'] + $byType['charging_usb_c']['total'])) * 100, 1)
+                    : 0.0,
+            ],
             'overall' => [
                 'total' => $totalTarget,
                 'occupied' => $totalOccupied,

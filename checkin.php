@@ -23,7 +23,7 @@ $pdo = db();
 $qr = normalize_qr((string)($_GET['qr'] ?? ''));
 $type = trim((string)($_GET['type'] ?? ''));
 
-if ($qr === '' || !in_array($type, ['storage', 'charging'], true)) {
+if ($qr === '' || !in_array($type, ['storage', 'charging_usb_a', 'charging_usb_c'], true)) {
     fail('bad_request');
 }
 
@@ -43,16 +43,30 @@ try {
         throw new RuntimeException('already_checked_in');
     }
 
-        $slotStmt = $pdo->prepare("SELECT s.id, s.slot_number
-                FROM slots s
-                LEFT JOIN phone_sessions ps ON ps.slot_id = s.id AND ps.status = 'checked_in'
-                WHERE s.slot_type = ?
-                    AND s.is_active = 1
-                    AND ps.id IS NULL
-                ORDER BY s.slot_number
-                LIMIT 1
-                FOR UPDATE");
-    $slotStmt->execute([$type]);
+    $slotType = 'storage';
+    $slotPrefix = 'O';
+    $deliveryType = 'storage';
+    if ($type === 'charging_usb_a') {
+        $slotType = 'charging';
+        $slotPrefix = 'A';
+        $deliveryType = 'charging';
+    } elseif ($type === 'charging_usb_c') {
+        $slotType = 'charging';
+        $slotPrefix = 'C';
+        $deliveryType = 'charging';
+    }
+
+    $slotStmt = $pdo->prepare("SELECT s.id, s.slot_number
+            FROM slots s
+            LEFT JOIN phone_sessions ps ON ps.slot_id = s.id AND ps.status = 'checked_in'
+            WHERE s.slot_type = ?
+              AND s.slot_number LIKE ?
+              AND s.is_active = 1
+              AND ps.id IS NULL
+            ORDER BY CAST(SUBSTR(s.slot_number, 2) AS UNSIGNED) ASC
+            LIMIT 1
+            FOR UPDATE");
+    $slotStmt->execute([$slotType, $slotPrefix . '%']);
     $slot = $slotStmt->fetch();
     if (!$slot) {
         throw new RuntimeException('no_free_slot');
@@ -61,7 +75,7 @@ try {
     $token = bin2hex(random_bytes(16));
     $insert = $pdo->prepare("INSERT INTO phone_sessions(participant_id, slot_id, delivery_type, checkin_time, status, session_token)
         VALUES (?, ?, ?, NOW(), 'checked_in', ?)");
-    $insert->execute([(int)$participant['id'], (int)$slot['id'], $type, $token]);
+    $insert->execute([(int)$participant['id'], (int)$slot['id'], $deliveryType, $token]);
 
     $sessionId = (int)$pdo->lastInsertId();
     $pdo->commit();
@@ -120,6 +134,7 @@ try {
             'qr' => $participant['qr_code'],
             'slot' => $slot['slot_number'],
             'type' => $type,
+            'delivery_type' => $deliveryType,
             'print_started' => $printStarted
         ]);
     } catch (Throwable) {
@@ -140,6 +155,7 @@ try {
         'slot' => $slot['slot_number'],
         'name' => trim($participant['first_name'] . ' ' . $participant['last_name']),
         'type' => $type,
+        'delivery_type' => $deliveryType,
         'checked_in_at' => gmdate('Y-m-d H:i:s'),
         'session_token' => $token,
         'checkout_url' => $checkoutUrl,
