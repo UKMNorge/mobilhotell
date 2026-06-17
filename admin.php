@@ -45,7 +45,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
 #gridStorage,
 #gridChargingA,
 #gridChargingC { max-height: 320px; overflow: auto; padding: 6px; background: #f6faf6; border-radius: 10px; border: 1px solid #dfe7df; }
-.view-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.view-nav { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
 .view-toggle { background: #ecefec; color: #17332f; font-weight: 700; }
 .view-toggle.active { background: #056256; color: #fff; }
 #screentimeWrap { max-height: 460px; overflow: auto; border: 1px solid #dfe7df; border-radius: 10px; }
@@ -74,6 +74,47 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
 .screentime-tools input[type="checkbox"] {
   width: 26px;
   height: 26px;
+}
+.detox-box {
+  margin-top: 12px;
+  background: #f4f8f5;
+  border: 1px solid #dbe5de;
+  border-radius: 10px;
+  padding: 12px;
+}
+.detox-box p {
+  margin: 0 0 10px;
+  font-size: 20px;
+  line-height: 1.35;
+}
+.detox-tools {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.detox-tools input[type="date"] {
+  font-size: 22px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #bcc7c0;
+}
+#detoxWrap {
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid #dfe7df;
+  border-radius: 10px;
+  background: #fff;
+}
+#detoxWrap table {
+  min-width: 100%;
+}
+#detoxWrap thead th {
+  position: sticky;
+  top: 0;
+  background: #f7faf7;
+  z-index: 1;
 }
 .modal {
   position: fixed;
@@ -137,6 +178,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     </div>
     <div class="view-nav">
       <button type="button" class="view-toggle active" data-view="health">Driftstatus</button>
+      <button type="button" class="view-toggle" data-view="detox">Digital Detox</button>
       <button type="button" class="view-toggle" data-view="active">Aktive innleveringer</button>
       <button type="button" class="view-toggle" data-view="screentime">Skjermtid</button>
       <button type="button" class="view-toggle" data-view="slots">Slots</button>
@@ -148,6 +190,30 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   <section id="panelHealth" class="panel">
     <h2>Driftstatus</h2>
     <div id="health" class="status-grid"></div>
+  </section>
+
+  <section id="panelDetox" class="panel" hidden>
+    <div class="detox-box" style="margin-top:0;">
+      <h2>Digital Detox</h2>
+      <p><strong>Digital Detox - tør du legge vekk mobilen?</strong></p>
+      <p>Under festivalen kan du prøve <strong>Digital Detox</strong>. Lever mobilen din i sekretariatet ved Retrohallen før kl. 09:30, og utfordre deg selv til en dag uten skjerm.</p>
+      <p>Hvis mobilen fortsatt ligger der kl. 18:30, er du invitert til festivalsjefens <strong>DD-møte (Digital Detox)</strong> i kaffebaren. Her får du en liten belønning for innsatsen, noe godt å kose deg med etter middagen, og mulighet til å dele erfaringer med andre som har vært skjermfrie hele dagen.</p>
+      <p><strong>Digital Detox gjennomføres hver dag under festivalen - søndag, mandag og tirsdag.</strong> Ingen påmelding, bare lever inn mobilen og prøv.</p>
+
+      <div class="detox-tools">
+        <label for="detoxDay">Dag</label>
+        <input id="detoxDay" type="date">
+        <button id="loadDetox" class="primary" type="button">Vis hvem som har klart</button>
+        <button id="printDetox" class="warn" type="button">Skriv ut liste</button>
+      </div>
+      <div id="detoxMeta" style="font-size:18px; margin-bottom:8px; color:#29433c;"></div>
+      <div id="detoxWrap">
+        <table>
+          <thead><tr><th>Navn</th><th>QR</th><th>Innlevert</th><th>Utlevert</th></tr></thead>
+          <tbody id="detoxBody"><tr><td colspan="4">Velg dag og trykk "Vis hvem som har klart"</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <section id="panelEvents" class="panel">
@@ -227,6 +293,11 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   const message = document.getElementById('message');
   const health = document.getElementById('health');
   const eventLog = document.getElementById('eventLog');
+  const detoxDay = document.getElementById('detoxDay');
+  const loadDetox = document.getElementById('loadDetox');
+  const printDetox = document.getElementById('printDetox');
+  const detoxMeta = document.getElementById('detoxMeta');
+  const detoxBody = document.getElementById('detoxBody');
   const screentimeBody = document.getElementById('screentimeBody');
   const screentimeSort = document.getElementById('screentimeSort');
   const screentimeOnlyCheckedIn = document.getElementById('screentimeOnlyCheckedIn');
@@ -240,6 +311,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   const viewButtons = Array.from(document.querySelectorAll('[data-view]'));
   const panels = {
     health: document.getElementById('panelHealth'),
+    detox: document.getElementById('panelDetox'),
     active: document.getElementById('panelActive'),
     screentime: document.getElementById('panelScreentime'),
     slots: document.getElementById('panelSlots'),
@@ -255,6 +327,15 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   let screentimeItems = [];
   let currentView = 'health';
   let lastScreentimeLoadAt = 0;
+  let lastDetoxLoadAt = 0;
+
+  function todayIso() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
 
   function applyCursorSetting(hidden) {
     document.body.classList.toggle('cursor-hidden', hidden);
@@ -312,6 +393,61 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
         + '</tr>'
       ).join('')
       + '</tbody></table>';
+  }
+
+  function renderDetox(items) {
+    if (!items.length) {
+      detoxBody.innerHTML = '<tr><td colspan="4">Ingen deltakere har klart Digital Detox for valgt dag enda.</td></tr>';
+      return;
+    }
+
+    detoxBody.innerHTML = items.map((it) =>
+      '<tr>'
+      + '<td>' + esc(it.name || '') + '</td>'
+      + '<td>' + esc(it.qr_code || '') + '</td>'
+      + '<td>' + esc(it.first_checkin || '-') + '</td>'
+      + '<td>' + esc(it.checkout_time || 'Fortsatt innlevert') + '</td>'
+      + '</tr>'
+    ).join('');
+  }
+
+  async function loadDigitalDetox(force = false) {
+    const now = Date.now();
+    if (!force && (now - lastDetoxLoadAt) < 15000) {
+      return;
+    }
+
+    const day = detoxDay.value || todayIso();
+    const data = await api('admin_api.php?action=digital_detox_report&day=' + encodeURIComponent(day));
+    if (!data.success) {
+      detoxMeta.textContent = 'Kunne ikke hente Digital Detox-liste';
+      detoxBody.innerHTML = '<tr><td colspan="4">Feil ved henting</td></tr>';
+      return;
+    }
+
+    const count = Number(data.count || 0);
+    const doneText = data.day_complete ? 'Dagen er ferdig evaluert.' : 'Dagen er ikke ferdig evaluert enda (for 18:30).';
+    detoxMeta.textContent = data.day + ' - ' + count + ' klarte Digital Detox. ' + doneText;
+    renderDetox(data.items || []);
+    lastDetoxLoadAt = now;
+  }
+
+  async function printDigitalDetoxList() {
+    const day = detoxDay.value || todayIso();
+    try {
+      const data = await api('admin_api.php?action=digital_detox_print', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({day})
+      });
+      if (!data.success) {
+        setMessage('Utskrift feilet for Digital Detox', false);
+        return;
+      }
+      setMessage('Digital Detox-liste sendt til kvitteringsskriver', true);
+    } catch {
+      setMessage('Utskrift feilet for Digital Detox', false);
+    }
   }
 
   function setMessage(text, ok) {
@@ -405,6 +541,9 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     if (viewName === 'screentime') {
       loadScreentime(true);
     }
+    if (viewName === 'detox') {
+      loadDigitalDetox(true);
+    }
   }
 
   function closeSlotModal() {
@@ -461,6 +600,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   async function loadAll(forceAll = false) {
     try {
       const tasks = [loadHealth(), loadEvents()];
+      if (forceAll || currentView === 'detox') tasks.push(loadDigitalDetox(forceAll));
       if (forceAll || currentView === 'active') tasks.push(loadActive());
       if (forceAll || currentView === 'slots') tasks.push(loadGrid());
       if (forceAll || currentView === 'screentime') tasks.push(loadScreentime(forceAll));
@@ -631,11 +771,15 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   screentimeSort.addEventListener('change', renderScreentimeTable);
   screentimeOnlyCheckedIn.addEventListener('change', renderScreentimeTable);
   clearScreentime.addEventListener('click', clearScreentimeLog);
+  loadDetox.addEventListener('click', () => loadDigitalDetox(true));
+  printDetox.addEventListener('click', printDigitalDetoxList);
+  detoxDay.addEventListener('change', () => loadDigitalDetox(true));
 
   ['pointerdown', 'keydown', 'touchstart', 'scroll', 'mousemove'].forEach((evt) => {
     window.addEventListener(evt, restartIdleTimer, { passive: true });
   });
 
+  detoxDay.value = todayIso();
   poll = setInterval(() => loadAll(false), 15000);
   loadCursorSetting();
   restartIdleTimer();

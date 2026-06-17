@@ -37,6 +37,65 @@ function node_info(): array
     ];
 }
 
+function parse_day(string $value): string
+{
+        $value = trim($value);
+        if ($value === '') {
+                return gmdate('Y-m-d');
+        }
+
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $m)) {
+                return gmdate('Y-m-d');
+        }
+
+        $y = (int)$m[1];
+        $mo = (int)$m[2];
+        $d = (int)$m[3];
+        if (!checkdate($mo, $d, $y)) {
+                return gmdate('Y-m-d');
+        }
+
+        return sprintf('%04d-%02d-%02d', $y, $mo, $d);
+}
+
+function fetch_digital_detox_items(PDO $pdo, string $day): array
+{
+        $dayStart = $day . ' 00:00:00';
+        $nextDay = date('Y-m-d 00:00:00', strtotime($day . ' +1 day'));
+        $checkinDeadline = $day . ' 09:30:00';
+        $detoxDeadline = $day . ' 18:30:00';
+
+        $stmt = $pdo->prepare("SELECT
+                p.id AS participant_id,
+                p.qr_code,
+                p.first_name,
+                p.last_name,
+                MIN(ps.checkin_time) AS first_checkin,
+                MAX(CASE WHEN ps.status = 'checked_out' THEN ps.checkout_time ELSE NULL END) AS checkout_time
+            FROM phone_sessions ps
+            JOIN participants p ON p.id = ps.participant_id
+            WHERE ps.checkin_time >= ?
+                AND ps.checkin_time < ?
+                AND ps.checkin_time <= ?
+            GROUP BY p.id, p.qr_code, p.first_name, p.last_name
+            HAVING (
+                MAX(CASE WHEN ps.status = 'checked_out' AND ps.checkout_time >= ? THEN 1 ELSE 0 END) = 1
+                OR (
+                    MAX(CASE WHEN ps.status = 'checked_in' THEN 1 ELSE 0 END) = 1
+                    AND NOW() >= ?
+                )
+            )
+            ORDER BY p.last_name ASC, p.first_name ASC");
+        $stmt->execute([$dayStart, $nextDay, $checkinDeadline, $detoxDeadline, $detoxDeadline]);
+
+        $items = $stmt->fetchAll();
+        foreach ($items as &$row) {
+                $row['name'] = trim((string)$row['first_name'] . ' ' . (string)$row['last_name']);
+        }
+
+        return $items;
+}
+
 function parse_csv_upload(PDO $pdo): array
 {
     if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
@@ -497,6 +556,58 @@ if ($action === 'import_csv' && $method === 'POST') {
         'inserted' => $result['inserted'],
         'updated' => $result['updated']
     ]);
+}
+
+if ($action === 'digital_detox_report' && $method === 'GET') {
+    $day = parse_day((string)($_GET['day'] ?? ''));
+    $items = fetch_digital_detox_items($pdo, $day);
+    $detoxDeadline = $day . ' 18:30:00';
+
+    out([
+        'success' => true,
+        'day' => $day,
+        'checkin_deadline' => $day . ' 09:30:00',
+        'detox_deadline' => $detoxDeadline,
+        'day_complete' => (gmdate('Y-m-d H:i:s') >= $detoxDeadline),
+        'count' => count($items),
+        'items' => $items,
+    ]);
+}
+
+if ($action === 'digital_detox_print' && $method === 'POST') {
+    $input = input_json();
+    $day = parse_day((string)($input['day'] ?? ''));
+    $script = __DIR__ . '/print_digital_detox.php';
+
+    if (!is_file($script)) {
+        out(['success' => false, 'error' => 'print_script_missing'], 500);
+    }
+
+    $phpBin = is_executable('/usr/bin/php') ? '/usr/bin/php' : 'php';
+    $cmd = sprintf(
+        '%s %s --day=%s 2>&1',
+        escapeshellcmd($phpBin),
+        escapeshellarg($script),
+        escapeshellarg($day)
+    );
+    $output = [];
+    $exit = 1;
+    exec($cmd, $output, $exit);
+
+    if ($exit !== 0) {
+        log_event($pdo, 'digital_detox_print_error', 'Digital Detox utskrift feilet', [
+            'day' => $day,
+            'exit_code' => $exit,
+            'output' => implode("\n", $output),
+        ]);
+        out(['success' => false, 'error' => 'print_failed', 'detail' => implode("\n", $output)], 500);
+    }
+
+    log_event($pdo, 'digital_detox_print', 'Digital Detox liste skrevet ut', [
+        'day' => $day,
+    ]);
+
+    out(['success' => true, 'day' => $day]);
 }
 
 out(['success' => false, 'error' => 'unknown_action'], 404);
