@@ -56,11 +56,10 @@ h1 {
   z-index: 25;
 }
 .mode-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  display: flex;
+  justify-content: center;
   margin: 0 auto 10px;
-  max-width: 1200px;
+  max-width: 760px;
   position: sticky;
   top: 0;
   z-index: 20;
@@ -78,6 +77,9 @@ h1 {
   font-weight: 800;
   padding: 18px;
   min-height: 82px;
+}
+.mode-switch .mode-btn {
+  width: min(100%, 640px);
 }
 .mode-btn.active {
   color: #fff;
@@ -304,9 +306,9 @@ p {
   margin-top: 6px;
 }
 .participant-actions .btn {
-  font-size: clamp(34px, 3vw, 48px);
-  min-height: 102px;
-  padding: 22px 24px;
+  font-size: clamp(30px, 2.6vw, 42px);
+  min-height: 72px;
+  padding: 10px 14px;
 }
 .participant-actions {
   grid-template-columns: 1fr;
@@ -487,6 +489,30 @@ p {
   display: flex;
   flex-direction: column;
 }
+.bottom-action {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.bottom-action[hidden] {
+  display: none !important;
+}
+.bottom-action .btn {
+  width: min(100%, 1200px);
+}
+#btnPrintGeneralLabel {
+  width: auto;
+  font-size: clamp(24px, 1.8vw, 32px);
+  padding: 12px 18px;
+  min-height: 58px;
+  border-radius: 10px;
+}
+.bottom-status {
+  min-height: 28px;
+  font-size: 22px;
+}
 #view {
   flex: 1;
   min-height: 0;
@@ -545,7 +571,7 @@ body.showing-card .avatar {
     border-radius: 14px;
   }
   .mode-switch {
-    grid-template-columns: 1fr;
+    justify-content: center;
   }
   .top-tools {
     position: static;
@@ -577,7 +603,8 @@ body.showing-card .avatar {
   }
   .participant-actions .btn {
     font-size: 30px;
-    min-height: 92px;
+    min-height: 78px;
+    padding: 10px 12px;
   }
   .receipt-head {
     padding: 10px 12px;
@@ -671,12 +698,11 @@ body.showing-card .avatar {
 <body>
 <main>
   <div class="mode-switch">
-    <button id="modePhone" class="mode-btn mode-phone active" type="button">Mobilhotell (slot/lading)</button>
-    <button id="modeStorage" class="mode-btn mode-storage" type="button">Generell oppbevaring (scan inn/ut)</button>
+    <button id="modePhone" class="mode-btn mode-phone active" type="button">Mobilhotell UKM</button>
   </div>
 
   <h1 id="pageTitle">Mobilhotell</h1>
-  <p id="pageSubhead" class="subhead">Scan QR-kode for slot/lading, eller søk deltakernavn</p>
+  <p id="pageSubhead" class="subhead">Scan QR-kode, eller søk deltakernavn</p>
 
   <div class="top-tools">
     <button id="btnFocus" class="chip">Reaktiver scanner</button>
@@ -704,6 +730,10 @@ body.showing-card .avatar {
     <div id="loading" class="loading" style="display:none">Laster...</div>
     <div id="view"></div>
   </div>
+  <div id="generalLabelWrap" class="bottom-action" hidden>
+    <button id="btnPrintGeneralLabel" class="btn btn-primary" type="button" disabled>Skriv ut etikett for annen oppbevaring</button>
+    <div id="generalLabelStatus" class="bottom-status"></div>
+  </div>
 </main>
 
 <div id="osk" class="osk" aria-hidden="true">
@@ -720,10 +750,12 @@ body.showing-card .avatar {
   const btnFocus = document.getElementById('btnFocus');
   const btnReset = document.getElementById('btnReset');
   const btnClearSearch = document.getElementById('btnClearSearch');
+  const generalLabelWrap = document.getElementById('generalLabelWrap');
   const netState = document.getElementById('netState');
   const adminQuickLink = document.getElementById('adminQuickLink');
   const modePhone = document.getElementById('modePhone');
-  const modeStorage = document.getElementById('modeStorage');
+  const btnPrintGeneralLabel = document.getElementById('btnPrintGeneralLabel');
+  const generalLabelStatus = document.getElementById('generalLabelStatus');
   const pageTitle = document.getElementById('pageTitle');
   const pageSubhead = document.getElementById('pageSubhead');
   const adminPanel = document.getElementById('adminPanel');
@@ -739,13 +771,9 @@ body.showing-card .avatar {
   let scanResetTimer = null;
   let lastScanQr = '';
   let lastScanAt = 0;
-  let storageToggleInFlight = false;
-  let lastStorageToggleQr = '';
-  let lastStorageToggleAt = 0;
-  let pendingStorageCheckin = null;
   let oskTarget = null;
   let oskShift = false;
-  let currentMode = localStorage.getItem('mobilhotell_mode') === 'storage' ? 'storage' : 'phone';
+  let selectedParticipantIdForGeneralLabel = 0;
 
   const oskLayout = [
     ['1','2','3','4','5','6','7','8','9','0','backspace'],
@@ -834,47 +862,39 @@ body.showing-card .avatar {
   }
 
   function applyModeUI() {
-    modePhone.classList.toggle('active', currentMode === 'phone');
-    modeStorage.classList.toggle('active', currentMode === 'storage');
-    document.body.classList.toggle('mode-phone', currentMode === 'phone');
-    document.body.classList.toggle('mode-storage', currentMode === 'storage');
-
-    if (currentMode === 'storage') {
-      pageTitle.textContent = 'Generell oppbevaring';
-      pageSubhead.textContent = 'Scan QR for å registrere inn eller ut';
-      search.placeholder = 'Søk navn eller QR (generell oppbevaring)';
-      adminPanel.hidden = true;
-      adminQuickLink.textContent = 'Admin';
-      adminQuickLink.href = 'admin_general.php';
-    } else {
-      pageTitle.textContent = 'Mobilhotell';
-      pageSubhead.textContent = 'Scan QR-kode for slot/lading, eller søk deltakernavn';
-      search.placeholder = 'Søk navn eller QR';
-      adminPanel.hidden = false;
-      adminQuickLink.textContent = 'Admin';
-      adminQuickLink.href = 'admin.php';
-    }
+    modePhone.classList.add('active');
+    document.body.classList.add('mode-phone');
+    document.body.classList.remove('mode-storage');
+    pageTitle.textContent = 'Mobilhotell';
+    pageSubhead.textContent = 'Scan QR-kode, eller søk deltakernavn';
+    search.placeholder = 'Søk navn eller QR';
+    adminPanel.hidden = false;
+    adminQuickLink.textContent = 'Admin';
+    adminQuickLink.href = 'admin.php';
   }
 
-  async function printStorageLabel(storageSessionId) {
-    if (Number(storageSessionId) <= 0) {
+  function setGeneralLabelParticipant(participantId) {
+    selectedParticipantIdForGeneralLabel = Number(participantId || 0);
+    generalLabelWrap.hidden = selectedParticipantIdForGeneralLabel <= 0;
+    btnPrintGeneralLabel.disabled = selectedParticipantIdForGeneralLabel <= 0;
+  }
+
+  async function printStorageLabel(params) {
+    const storageSessionId = Number(params?.storageSessionId || 0);
+    const participantId = Number(params?.participantId || 0);
+    if (storageSessionId <= 0 && participantId <= 0) {
       return false;
     }
-    const printData = await json('print_storage_label.php?storage_session_id=' + encodeURIComponent(String(storageSessionId)) + '&_ts=' + Date.now());
+    const qp = new URLSearchParams();
+    if (storageSessionId > 0) {
+      qp.set('storage_session_id', String(storageSessionId));
+    }
+    if (participantId > 0) {
+      qp.set('participant_id', String(participantId));
+    }
+    qp.set('_ts', String(Date.now()));
+    const printData = await json('print_storage_label.php?' + qp.toString());
     return !!(printData && printData.success);
-  }
-
-  function setMode(mode) {
-    currentMode = mode === 'storage' ? 'storage' : 'phone';
-    localStorage.setItem('mobilhotell_mode', currentMode);
-    applyModeUI();
-    view.innerHTML = '';
-    search.value = '';
-    results.innerHTML = '';
-    scanner.value = '';
-    document.body.classList.remove('showing-card');
-    hideKeyboard();
-    scanner.focus();
   }
 
   function capacityFillClass(percent) {
@@ -919,6 +939,8 @@ body.showing-card .avatar {
       view.innerHTML = '';
       document.body.classList.remove('showing-card');
       hideKeyboard();
+      setGeneralLabelParticipant(0);
+      generalLabelStatus.textContent = '';
       loadCapacity();
     }, 12000);
   }
@@ -993,16 +1015,12 @@ body.showing-card .avatar {
     lastScanQr = qr;
     lastScanAt = now;
 
-    if (currentMode === 'storage') {
-      await handleStorageScan({ qr });
-      return;
-    }
-
     setLoading(true);
     try {
       const data = await json('lookup.php?qr=' + encodeURIComponent(qr));
       if (!data.found) {
         view.innerHTML = '<div class="error">Deltaker ikke funnet</div>';
+        setGeneralLabelParticipant(0);
         scheduleReset();
         return;
       }
@@ -1016,171 +1034,6 @@ body.showing-card .avatar {
     }
   }
 
-  async function getStoragePreview(payload) {
-    const params = new URLSearchParams();
-    const qr = normalizeQrInput(payload.qr || '');
-    if (qr) params.set('qr', qr);
-    if (payload.participant_id) params.set('participant_id', String(payload.participant_id));
-    params.set('dry_run', '1');
-    params.set('_ts', String(Date.now()));
-    return await json('storage_toggle.php?' + params.toString());
-  }
-
-  function renderStorageCheckinChoice(data) {
-    pendingStorageCheckin = {
-      participant_id: Number(data.participant_id || 0),
-      qr: normalizeQrInput(data.qr || ''),
-      image: data.image || 'images/default.png',
-      name: data.name || '',
-      county: data.county || '',
-      type: data.type || ''
-    };
-
-    view.innerHTML = '<div class="card participant-card">'
-      + '<img class="avatar" src="' + esc(resolveImage(pendingStorageCheckin.image)) + '" alt="Deltakerbilde">'
-      + '<div class="name">' + esc(pendingStorageCheckin.name) + '</div>'
-      + '<div class="participant-meta">' + esc(pendingStorageCheckin.county) + ' - ' + esc(pendingStorageCheckin.type) + '</div>'
-      + '<div class="action-row participant-actions" style="margin-top:14px">'
-      + '<button class="btn btn-primary" type="button" data-storage-checkin="print">Etikett + Oppbevar</button>'
-      + '<button class="btn btn-warn" type="button" data-storage-checkin="skip">Oppbevar</button>'
-      + '</div>'
-      + '<div id="storageLabelStatus" style="font-size:22px; margin-top:10px"></div>'
-      + '</div>';
-
-    document.body.classList.add('showing-card');
-    hideKeyboard();
-
-    const btnPrint = view.querySelector('[data-storage-checkin="print"]');
-    const btnSkip = view.querySelector('[data-storage-checkin="skip"]');
-
-    if (btnPrint) {
-      btnPrint.addEventListener('click', () => confirmStorageCheckin(true));
-    }
-    if (btnSkip) {
-      btnSkip.addEventListener('click', () => confirmStorageCheckin(false));
-    }
-  }
-
-  async function handleStorageScan(payload) {
-    setLoading(true);
-    try {
-      const preview = await getStoragePreview(payload);
-      if (!preview.success) {
-        let msg = 'Feil i generell oppbevaring';
-        if (preview.error === 'participant_not_found') msg = 'Deltaker ikke funnet';
-        else if (preview.error === 'server_error') msg = 'Serverfeil ved inn/ut';
-        if (preview.error) msg += ' (' + String(preview.error) + ')';
-        view.innerHTML = '<div class="error">' + esc(msg) + '</div>';
-        scheduleReset();
-        return;
-      }
-
-      if (preview.action === 'checked_in') {
-        renderStorageCheckinChoice(preview);
-        return;
-      }
-
-      await toggleStorage({
-        participant_id: Number(preview.participant_id || 0),
-        qr: normalizeQrInput(preview.qr || payload.qr || ''),
-        printLabel: false
-      });
-    } catch {
-      view.innerHTML = '<div class="error">Feil i generell oppbevaring</div>';
-      scheduleReset();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function confirmStorageCheckin(printLabel) {
-    if (!pendingStorageCheckin || storageToggleInFlight) {
-      return;
-    }
-
-    const selected = pendingStorageCheckin;
-    pendingStorageCheckin = null;
-    await toggleStorage({
-      participant_id: selected.participant_id,
-      qr: selected.qr,
-      printLabel: !!printLabel,
-      image: selected.image,
-      county: selected.county,
-      type: selected.type
-    });
-  }
-
-  async function toggleStorage(payload) {
-    const qr = normalizeQrInput(payload.qr || '');
-    const now = Date.now();
-
-    if (storageToggleInFlight) {
-      return;
-    }
-
-    if (qr && qr === lastStorageToggleQr && (now - lastStorageToggleAt) < 1400) {
-      return;
-    }
-
-    storageToggleInFlight = true;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (qr) params.set('qr', qr);
-      if (payload.participant_id) params.set('participant_id', String(payload.participant_id));
-      params.set('_ts', String(Date.now()));
-
-      const data = await json('storage_toggle.php?' + params.toString());
-      if (!data.success) {
-        let msg = 'Feil i generell oppbevaring';
-        if (data.error === 'participant_not_found') msg = 'Deltaker ikke funnet';
-        else if (data.error === 'session_conflict') msg = 'Konflikt: deltaker er allerede registrert aktiv';
-        else if (data.error === 'session_not_checked_in') msg = 'Kunne ikke registrere utlevering';
-        else if (data.error === 'server_error') msg = 'Serverfeil ved inn/ut';
-        if (data.error) msg += ' (' + String(data.error) + ')';
-        view.innerHTML = '<div class="error">' + esc(msg) + '</div>';
-        scheduleReset();
-        return;
-      }
-
-      lastStorageToggleQr = normalizeQrInput(data.qr || qr);
-      lastStorageToggleAt = Date.now();
-
-      const isIn = data.action === 'checked_in';
-      const title = isIn ? 'Innlevert i generell oppbevaring' : 'Utlevert fra generell oppbevaring';
-      let labelStatus = '';
-      if (isIn && payload.printLabel === true && Number(data.storage_session_id || 0) > 0) {
-        const printed = await printStorageLabel(Number(data.storage_session_id || 0));
-        labelStatus = printed
-          ? '<div id="storageLabelStatus" style="font-size:22px; margin-top:10px"><strong>Etikett skrevet ut.</strong></div>'
-          : '<div id="storageLabelStatus" style="font-size:22px; margin-top:10px"><strong>Kunne ikke skrive ut etikett.</strong></div>';
-      }
-
-      const imagePath = data.image || payload.image || 'images/default.png';
-      const county = data.county || payload.county || '';
-      const type = data.type || payload.type || '';
-
-      view.innerHTML = '<div class="card participant-card">'
-        + '<img class="avatar" src="' + esc(resolveImage(imagePath)) + '" alt="Deltakerbilde">'
-        + '<div class="slot">' + esc(isIn ? 'INN' : 'UT') + '</div>'
-        + '<div class="name" style="font-size:36px">' + esc(data.name || '') + '</div>'
-        + '<div class="participant-meta">' + esc(county) + ' - ' + esc(type) + '</div>'
-        + '<div style="font-size:28px; margin-top:8px"><strong>' + esc(title) + '</strong></div>'
-        + labelStatus
-        + '</div>';
-
-      document.body.classList.add('showing-card');
-      hideKeyboard();
-      scheduleReset();
-    } catch {
-      view.innerHTML = '<div class="error">Feil i generell oppbevaring</div>';
-      scheduleReset();
-    } finally {
-      storageToggleInFlight = false;
-      setLoading(false);
-    }
-  }
-
   function renderParticipant(p) {
     const screenMin = Math.floor((Number(p.screenfree_seconds || 0) % 3600) / 60);
     const screenH = Math.floor(Number(p.screenfree_seconds || 0) / 3600);
@@ -1189,7 +1042,7 @@ body.showing-card .avatar {
     if (p.checked_in && p.session_id) {
       actions = '<div class="slot">' + esc(formatSlotLabel(p.slot)) + '</div><button class="btn btn-primary" data-checkout="' + Number(p.session_id) + '">Registrer utlevert</button>';
     } else {
-      actions = '<div class="action-row participant-actions"><button class="btn btn-primary" data-checkin="storage">Oppbevar Mobil</button><button class="btn btn-warn" data-checkin="charging_usb_a">Lad Mobil USB-A</button><button class="btn btn-warn" data-checkin="charging_usb_c">Lad Mobil USB-C</button></div>';
+      actions = '<div class="action-row participant-actions"><button class="btn btn-warn" data-checkin="storage">Oppbevar mobil uten lading</button><button class="btn btn-warn" data-checkin="charging_usb_a">Oppbevar og lad mobil med USB-A</button><button class="btn btn-warn" data-checkin="charging_usb_c">Oppbevar og lad mobil med USB-C</button></div>';
     }
 
     view.innerHTML = '<div class="card participant-card">'
@@ -1201,6 +1054,7 @@ body.showing-card .avatar {
       + '</div>';
     document.body.classList.add('showing-card');
     hideKeyboard();
+    setGeneralLabelParticipant(Number(p.participant_id || 0));
 
     const c1 = view.querySelector('[data-checkin="storage"]');
     const c2 = view.querySelector('[data-checkin="charging_usb_a"]');
@@ -1396,8 +1250,7 @@ body.showing-card .avatar {
     lookupQr(qr);
   });
 
-  modePhone.addEventListener('click', () => setMode('phone'));
-  modeStorage.addEventListener('click', () => setMode('storage'));
+  modePhone.addEventListener('click', () => scanner.focus());
 
   btnFocus.addEventListener('click', () => scanner.focus());
   btnReset.addEventListener('click', () => {
@@ -1405,9 +1258,28 @@ body.showing-card .avatar {
     results.innerHTML = '';
     search.value = '';
     scanner.value = '';
+    setGeneralLabelParticipant(0);
+    generalLabelStatus.textContent = '';
     document.body.classList.remove('showing-card');
     hideKeyboard();
     scanner.focus();
+  });
+  btnPrintGeneralLabel.addEventListener('click', async () => {
+    if (selectedParticipantIdForGeneralLabel <= 0) {
+      generalLabelStatus.textContent = 'Ingen deltaker valgt.';
+      return;
+    }
+
+    btnPrintGeneralLabel.disabled = true;
+    generalLabelStatus.textContent = 'Skriver ut etikett...';
+    try {
+      const printed = await printStorageLabel({ participantId: selectedParticipantIdForGeneralLabel });
+      generalLabelStatus.textContent = printed ? 'Etikett skrevet ut.' : 'Kunne ikke skrive ut etikett.';
+    } catch {
+      generalLabelStatus.textContent = 'Kunne ikke skrive ut etikett.';
+    } finally {
+      btnPrintGeneralLabel.disabled = selectedParticipantIdForGeneralLabel <= 0;
+    }
   });
   btnClearSearch.addEventListener('click', () => {
     search.value = '';
@@ -1504,14 +1376,10 @@ body.showing-card .avatar {
     search.value = '';
     setLoading(true);
     try {
-      if (currentMode === 'storage') {
-        await toggleStorage({ participant_id: id });
-        return;
-      }
-
       const data = await json('lookup.php?participant_id=' + encodeURIComponent(String(id)));
       if (!data.found) {
         view.innerHTML = '<div class="error">Deltaker ikke funnet</div>';
+        setGeneralLabelParticipant(0);
       } else {
         renderParticipant(data);
       }

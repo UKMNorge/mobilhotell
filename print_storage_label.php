@@ -634,35 +634,47 @@ function print_label_file(string $path): void
 
 $pdo = db();
 $storageSessionId = (int)($_GET['storage_session_id'] ?? 0);
+$participantId = (int)($_GET['participant_id'] ?? 0);
 
-if ($storageSessionId <= 0) {
-    out(['success' => false, 'error' => 'missing_storage_session_id'], 400);
+if ($storageSessionId <= 0 && $participantId <= 0) {
+    out(['success' => false, 'error' => 'missing_identifier'], 400);
 }
 
-try {
-    $forwarded = maybe_forward_label_print($storageSessionId);
-    if (is_array($forwarded)) {
-        out([
-            'success' => true,
-            'storage_session_id' => (int)($forwarded['storage_session_id'] ?? $storageSessionId),
-            'participant_id' => (int)($forwarded['participant_id'] ?? 0),
-            'forwarded' => true,
-        ]);
+if ($storageSessionId > 0) {
+    try {
+        $forwarded = maybe_forward_label_print($storageSessionId);
+        if (is_array($forwarded)) {
+            out([
+                'success' => true,
+                'storage_session_id' => (int)($forwarded['storage_session_id'] ?? $storageSessionId),
+                'participant_id' => (int)($forwarded['participant_id'] ?? 0),
+                'forwarded' => true,
+            ]);
+        }
+    } catch (Throwable $e) {
+        out(['success' => false, 'error' => 'forward_failed', 'detail' => $e->getMessage()], 502);
     }
-} catch (Throwable $e) {
-    out(['success' => false, 'error' => 'forward_failed', 'detail' => $e->getMessage()], 502);
 }
 
-$stmt = $pdo->prepare("SELECT p.id AS participant_id, p.first_name, p.last_name, p.qr_code, p.phone_number
-    FROM storage_sessions ss
-    JOIN participants p ON p.id = ss.participant_id
-    WHERE ss.id = ?
-    LIMIT 1");
-$stmt->execute([$storageSessionId]);
+$stmt = null;
+if ($storageSessionId > 0) {
+    $stmt = $pdo->prepare("SELECT p.id AS participant_id, p.first_name, p.last_name, p.qr_code, p.phone_number
+        FROM storage_sessions ss
+        JOIN participants p ON p.id = ss.participant_id
+        WHERE ss.id = ?
+        LIMIT 1");
+    $stmt->execute([$storageSessionId]);
+} else {
+    $stmt = $pdo->prepare("SELECT p.id AS participant_id, p.first_name, p.last_name, p.qr_code, p.phone_number
+        FROM participants p
+        WHERE p.id = ?
+        LIMIT 1");
+    $stmt->execute([$participantId]);
+}
 $participant = $stmt->fetch();
 
 if (!$participant) {
-    out(['success' => false, 'error' => 'session_not_found'], 404);
+    out(['success' => false, 'error' => 'participant_not_found'], 404);
 }
 
 $pngPath = '';
@@ -672,19 +684,19 @@ try {
     print_label_file($pngPath);
 
     log_event($pdo, 'storage_label_printed', 'Etikett skrevet ut', [
-        'storage_session_id' => $storageSessionId,
+        'storage_session_id' => $storageSessionId > 0 ? $storageSessionId : null,
         'participant_id' => (int)$participant['participant_id'],
         'qr' => (string)$participant['qr_code'],
     ]);
 
     out([
         'success' => true,
-        'storage_session_id' => $storageSessionId,
+        'storage_session_id' => $storageSessionId > 0 ? $storageSessionId : null,
         'participant_id' => (int)$participant['participant_id'],
     ]);
 } catch (Throwable $e) {
     log_event($pdo, 'storage_label_print_error', 'Etikettutskrift feilet', [
-        'storage_session_id' => $storageSessionId,
+        'storage_session_id' => $storageSessionId > 0 ? $storageSessionId : null,
         'participant_id' => (int)$participant['participant_id'],
         'error' => $e->getMessage(),
     ]);

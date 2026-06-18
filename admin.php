@@ -42,9 +42,6 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
 #eventLog { max-height: 320px; overflow: auto; background: #f8faf8; border-radius: 10px; border: 1px solid #e3e8e3; }
 #eventLog table { font-size: 16px; }
 .inline-form { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
-#gridStorage,
-#gridChargingA,
-#gridChargingC { max-height: 320px; overflow: auto; padding: 6px; background: #f6faf6; border-radius: 10px; border: 1px solid #dfe7df; }
 .view-nav { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
 .view-toggle { background: #ecefec; color: #17332f; font-weight: 700; }
 .view-toggle.active { background: #056256; color: #fff; }
@@ -99,6 +96,79 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #bcc7c0;
+}
+.slots2-wrap {
+  display: grid;
+  gap: 16px;
+}
+.slots2-map {
+  background: #f5f8f6;
+  border: 1px solid #dbe5de;
+  border-radius: 12px;
+  padding: 12px;
+}
+.slots2-map h3 {
+  margin: 0 0 10px;
+}
+.slots2-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.slots2-segment {
+  background: #0f1413;
+  border: 2px solid #d4c6b6;
+  border-radius: 8px;
+  padding: 8px;
+}
+.slots2-segment-title {
+  color: #e9ece8;
+  font-size: 15px;
+  margin-bottom: 8px;
+  text-align: center;
+  font-weight: 700;
+}
+.slots2-grid {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: 5px;
+}
+.slots2-cell {
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 0;
+  min-height: 28px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: #46524c;
+}
+.slots2-cell.free {
+  background: #0b8e48;
+}
+.slots2-cell.busy {
+  background: #c53326;
+}
+.slots2-cell.disabled {
+  background: #8f8f8f;
+}
+.slots2-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 15px;
+}
+.slots2-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.slots2-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-block;
 }
 #detoxWrap {
   max-height: 300px;
@@ -155,6 +225,8 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   .status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .controls { grid-template-columns: 1fr 1fr; }
   .view-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .slots2-board { grid-template-columns: 1fr; }
+  .slots2-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); }
 }
 </style>
 </head>
@@ -251,13 +323,49 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   </section>
 
   <section id="panelSlots" class="panel" hidden>
-    <h2>Slots</h2>
-    <h3>Oppbevaring (O001-O180)</h3>
-    <div id="gridStorage" class="grid"></div>
-    <h3>Lading USB-A (A001-A060)</h3>
-    <div id="gridChargingA" class="grid"></div>
-    <h3>Lading USB-C (C001-C120)</h3>
-    <div id="gridChargingC" class="grid"></div>
+    <h2>Slots - Visuell Fyllingsoversikt</h2>
+    <div class="slots2-wrap">
+      <div class="slots2-map">
+        <h3>Oppbevaring (O001-O180)</h3>
+        <div class="slots2-board">
+          <div class="slots2-segment">
+            <div class="slots2-segment-title">1-60</div>
+            <div id="slots2Storage1" class="slots2-grid"></div>
+          </div>
+          <div class="slots2-segment">
+            <div class="slots2-segment-title">61-120</div>
+            <div id="slots2Storage2" class="slots2-grid"></div>
+          </div>
+          <div class="slots2-segment">
+            <div class="slots2-segment-title">121-180</div>
+            <div id="slots2Storage3" class="slots2-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slots2-map">
+        <h3>Lading</h3>
+        <div class="slots2-board">
+          <div class="slots2-segment">
+            <div class="slots2-segment-title">Lading USB-A (1-60)</div>
+            <div id="slots2Charging1" class="slots2-grid"></div>
+          </div>
+          <div class="slots2-segment">
+            <div class="slots2-segment-title">Lading USB-C (61-120)</div>
+            <div id="slots2Charging2" class="slots2-grid"></div>
+          </div>
+          <div class="slots2-segment">
+            <div class="slots2-segment-title">Lading USB-C (121-180)</div>
+            <div id="slots2Charging3" class="slots2-grid"></div>
+          </div>
+        </div>
+        <div class="slots2-legend">
+          <span><i class="slots2-dot" style="background:#0b8e48"></i> Ledig</span>
+          <span><i class="slots2-dot" style="background:#c53326"></i> Opptatt</span>
+          <span><i class="slots2-dot" style="background:#8f8f8f"></i> Ute av drift</span>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section id="panelImport" class="panel" hidden>
@@ -287,9 +395,12 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   const refresh = document.getElementById('refresh');
   const autoBtn = document.getElementById('auto');
   const activeBody = document.getElementById('activeBody');
-  const gridStorage = document.getElementById('gridStorage');
-  const gridChargingA = document.getElementById('gridChargingA');
-  const gridChargingC = document.getElementById('gridChargingC');
+  const slots2Storage1 = document.getElementById('slots2Storage1');
+  const slots2Storage2 = document.getElementById('slots2Storage2');
+  const slots2Storage3 = document.getElementById('slots2Storage3');
+  const slots2Charging1 = document.getElementById('slots2Charging1');
+  const slots2Charging2 = document.getElementById('slots2Charging2');
+  const slots2Charging3 = document.getElementById('slots2Charging3');
   const message = document.getElementById('message');
   const health = document.getElementById('health');
   const eventLog = document.getElementById('eventLog');
@@ -536,7 +647,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
       loadActive();
     }
     if (viewName === 'slots') {
-      loadGrid();
+      loadGrid2();
     }
     if (viewName === 'screentime') {
       loadScreentime(true);
@@ -574,18 +685,6 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     ).join('');
   }
 
-  async function loadGrid() {
-    const data = await api('admin_api.php?action=slot_grid');
-    const items = data.items || [];
-
-    const render = (slot) => '<button class="slot ' + esc(slot.status) + '" data-slot="' + esc(slot.slot_number) + '">'
-      + esc(slot.slot_number) + '<small>' + esc(slot.name || 'ledig') + '</small></button>';
-
-    gridStorage.innerHTML = items.filter(i => String(i.slot_number || '').toUpperCase().startsWith('O')).map(render).join('');
-    gridChargingA.innerHTML = items.filter(i => String(i.slot_number || '').toUpperCase().startsWith('A')).map(render).join('');
-    gridChargingC.innerHTML = items.filter(i => String(i.slot_number || '').toUpperCase().startsWith('C')).map(render).join('');
-  }
-
   async function loadScreentime(force = false) {
     const now = Date.now();
     if (!force && (now - lastScreentimeLoadAt) < 60000) {
@@ -597,12 +696,57 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     renderScreentimeTable();
   }
 
+  function normalizeSlot(slot) {
+    return String(slot || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function slotCode(prefix, number) {
+    return prefix + String(number).padStart(3, '0');
+  }
+
+  function renderSlots2Segment(container, items, type, from, to) {
+    const bySlot = new Map();
+    items.forEach((it) => {
+      bySlot.set(normalizeSlot(it.slot_number), it);
+    });
+
+    const cells = [];
+    for (let n = from; n <= to; n++) {
+      let code = '';
+      if (type === 'storage') {
+        code = slotCode('O', n);
+      } else if (n <= 60) {
+        code = slotCode('A', n);
+      } else {
+        code = slotCode('C', n - 60);
+      }
+
+      const it = bySlot.get(code);
+      const status = it ? String(it.status || 'disabled') : 'disabled';
+      cells.push('<button type="button" class="slots2-cell ' + esc(status) + '" title="' + esc(code) + '">' + n + '</button>');
+    }
+
+    container.innerHTML = cells.join('');
+  }
+
+  async function loadGrid2() {
+    const data = await api('admin_api.php?action=slot_grid');
+    const items = data.items || [];
+
+    renderSlots2Segment(slots2Storage1, items, 'storage', 1, 60);
+    renderSlots2Segment(slots2Storage2, items, 'storage', 61, 120);
+    renderSlots2Segment(slots2Storage3, items, 'storage', 121, 180);
+    renderSlots2Segment(slots2Charging1, items, 'charging', 1, 60);
+    renderSlots2Segment(slots2Charging2, items, 'charging', 61, 120);
+    renderSlots2Segment(slots2Charging3, items, 'charging', 121, 180);
+  }
+
   async function loadAll(forceAll = false) {
     try {
       const tasks = [loadHealth(), loadEvents()];
       if (forceAll || currentView === 'detox') tasks.push(loadDigitalDetox(forceAll));
       if (forceAll || currentView === 'active') tasks.push(loadActive());
-      if (forceAll || currentView === 'slots') tasks.push(loadGrid());
+      if (forceAll || currentView === 'slots') tasks.push(loadGrid2());
       if (forceAll || currentView === 'screentime') tasks.push(loadScreentime(forceAll));
       await Promise.all(tasks);
       setMessage('Data oppdatert', true);
