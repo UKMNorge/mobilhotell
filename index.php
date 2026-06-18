@@ -490,17 +490,20 @@ p {
   flex-direction: column;
 }
 .bottom-action {
-  margin-top: 10px;
+  position: fixed;
+  top: 12px;
+  right: 16px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
+  z-index: 26;
 }
 .bottom-action[hidden] {
   display: none !important;
 }
 .bottom-action .btn {
-  width: min(100%, 1200px);
+  width: auto;
 }
 #btnPrintGeneralLabel {
   width: auto;
@@ -512,6 +515,7 @@ p {
 .bottom-status {
   min-height: 28px;
   font-size: 22px;
+  text-align: right;
 }
 #view {
   flex: 1;
@@ -942,7 +946,7 @@ body.showing-card .avatar {
       setGeneralLabelParticipant(0);
       generalLabelStatus.textContent = '';
       loadCapacity();
-    }, 12000);
+    }, 90000);
   }
 
   function fitReceiptToViewport() {
@@ -1040,7 +1044,7 @@ body.showing-card .avatar {
 
     let actions = '';
     if (p.checked_in && p.session_id) {
-      actions = '<div class="slot">' + esc(formatSlotLabel(p.slot)) + '</div><button class="btn btn-primary" data-checkout="' + Number(p.session_id) + '">Registrer utlevert</button>';
+      actions = '<div class="slot">' + esc(formatSlotLabel(p.slot)) + '</div><button class="btn btn-primary" data-checkout="' + Number(p.session_id) + '">Registrer utlevering</button>';
     } else {
       actions = '<div class="action-row participant-actions"><button class="btn btn-warn" data-checkin="storage">Oppbevar mobil uten lading</button><button class="btn btn-warn" data-checkin="charging_usb_a">Oppbevar og lad mobil med USB-A</button><button class="btn btn-warn" data-checkin="charging_usb_c">Oppbevar og lad mobil med USB-C</button></div>';
     }
