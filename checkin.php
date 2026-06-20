@@ -19,6 +19,11 @@ function fail(string $error): void
     exit;
 }
 
+function choose_random_slot(array $freeSlots): array
+{
+    return $freeSlots[random_int(0, count($freeSlots) - 1)];
+}
+
 $pdo = db();
 $qr = normalize_qr((string)($_GET['qr'] ?? ''));
 $type = trim((string)($_GET['type'] ?? ''));
@@ -56,21 +61,29 @@ try {
         $deliveryType = 'charging';
     }
 
-    $slotStmt = $pdo->prepare("SELECT s.id, s.slot_number
+    $slotStmt = $pdo->prepare("SELECT s.id, s.slot_number, ps.id AS active_session_id
             FROM slots s
             LEFT JOIN phone_sessions ps ON ps.slot_id = s.id AND ps.status = 'checked_in'
             WHERE s.slot_type = ?
               AND s.slot_number LIKE ?
               AND s.is_active = 1
-              AND ps.id IS NULL
             ORDER BY CAST(SUBSTR(s.slot_number, 2) AS UNSIGNED) ASC
-            LIMIT 1
             FOR UPDATE");
     $slotStmt->execute([$slotType, $slotPrefix . '%']);
-    $slot = $slotStmt->fetch();
-    if (!$slot) {
+    $slotRows = $slotStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $freeSlots = [];
+    foreach ($slotRows as $row) {
+        if ($row['active_session_id'] === null) {
+            $freeSlots[] = $row;
+        }
+    }
+
+    if ($freeSlots === []) {
         throw new RuntimeException('no_free_slot');
     }
+
+    $slot = choose_random_slot($freeSlots);
 
     $token = bin2hex(random_bytes(16));
     $insert = $pdo->prepare("INSERT INTO phone_sessions(participant_id, slot_id, delivery_type, checkin_time, status, session_token)
