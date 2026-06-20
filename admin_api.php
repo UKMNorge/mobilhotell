@@ -37,6 +37,104 @@ function node_info(): array
     ];
 }
 
+function command_output_first_line(string $command): string
+{
+    $output = @shell_exec($command);
+    if (!is_string($output)) {
+        return '';
+    }
+
+    $line = trim(strtok($output, "\n") ?: '');
+    if ($line === '') {
+        return '';
+    }
+
+    // Keep printable text only so status values stay safe and compact.
+    return preg_replace('/[^\x20-\x7E]/', '', $line) ?? '';
+}
+
+function is_usable_ipv4(string $ip): bool
+{
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        return false;
+    }
+
+    if (str_starts_with($ip, '127.') || str_starts_with($ip, '0.') || str_starts_with($ip, '169.254.')) {
+        return false;
+    }
+
+    return true;
+}
+
+function first_usable_ipv4_from_line(string $line): string
+{
+    $parts = preg_split('/\s+/', trim($line)) ?: [];
+    foreach ($parts as $part) {
+        $ip = trim($part);
+        if (is_usable_ipv4($ip)) {
+            return $ip;
+        }
+    }
+
+    return '';
+}
+
+function network_info(): array
+{
+    $ip = '';
+
+    // Prefer IP from active WiFi interface when available.
+    $wifiIface = command_output_first_line("iw dev 2>/dev/null | awk '$1==\"Interface\" {print $2; exit}'");
+    if ($wifiIface !== '') {
+        $wifiIp = command_output_first_line("ip -4 -o addr show dev " . escapeshellarg($wifiIface) . " 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1");
+        if (is_usable_ipv4($wifiIp)) {
+            $ip = $wifiIp;
+        }
+    }
+
+    if ($ip === '') {
+        $routeIp = command_output_first_line("ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i==\"src\") {print $(i+1); exit}}'");
+        if (is_usable_ipv4($routeIp)) {
+            $ip = $routeIp;
+        }
+    }
+
+    if ($ip === '') {
+        $hostLine = command_output_first_line('hostname -I 2>/dev/null');
+        $parsed = first_usable_ipv4_from_line($hostLine);
+        if ($parsed !== '') {
+            $ip = $parsed;
+        }
+    }
+
+    if ($ip === '' && !empty($_SERVER['SERVER_ADDR'])) {
+        $serverIp = trim((string)$_SERVER['SERVER_ADDR']);
+        if (is_usable_ipv4($serverIp)) {
+            $ip = $serverIp;
+        }
+    }
+
+    if ($ip === '') {
+        $hostname = gethostname();
+        if (is_string($hostname) && $hostname !== '') {
+            $resolved = gethostbyname($hostname);
+            if (is_string($resolved) && $resolved !== '' && $resolved !== $hostname && is_usable_ipv4($resolved)) {
+                $ip = $resolved;
+            }
+        }
+    }
+
+    $ssid = command_output_first_line('iwgetid -r 2>/dev/null');
+    if ($ssid === '') {
+        $ssid = command_output_first_line("nmcli -t -f active,ssid dev wifi 2>/dev/null | awk -F: '$1 == \"yes\" {print $2; exit}'");
+    }
+
+    return [
+        'ip_address' => $ip !== '' ? $ip : '-',
+        'wifi_ssid' => $ssid !== '' ? $ssid : '-',
+    ];
+}
+
 function parse_day(string $value): string
 {
         $value = trim($value);
@@ -374,6 +472,7 @@ if ($action === 'health' && $method === 'GET') {
     $slotsBusy = (int)$pdo->query("SELECT COUNT(*) FROM slots s WHERE EXISTS (SELECT 1 FROM phone_sessions ps WHERE ps.slot_id = s.id AND ps.status = 'checked_in')")->fetchColumn();
     $participants = (int)$pdo->query('SELECT COUNT(*) FROM participants')->fetchColumn();
     $node = node_info();
+    $network = network_info();
 
     out([
         'success' => true,
@@ -387,6 +486,8 @@ if ($action === 'health' && $method === 'GET') {
             'participants_total' => $participants,
             'server_time' => gmdate('Y-m-d H:i:s'),
             'node_role' => $node['role'],
+            'ip_address' => $network['ip_address'],
+            'wifi_ssid' => $network['wifi_ssid'],
         ]
     ]);
 }

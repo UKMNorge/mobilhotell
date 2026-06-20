@@ -474,10 +474,13 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     const items = [
       ['Rolle', roleNo],
       ['Aktive', s.active_checkins || 0],
+      ['Generell aktive', s.active_storage_checkins || 0],
       ['Slots totalt', s.slots_total || 0],
       ['Slots ledige', s.slots_free_active || 0],
       ['Slots opptatt', s.slots_busy || 0],
       ['Deltakere', s.participants_total || 0],
+      ['IP', s.ip_address || '-'],
+      ['WiFi', s.wifi_ssid || '-'],
       ['Server tid', s.server_time || '-']
     ];
 
