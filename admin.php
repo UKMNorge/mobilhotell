@@ -736,7 +736,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
 
       const it = bySlot.get(code);
       const status = it ? String(it.status || 'disabled') : 'disabled';
-      cells.push('<button type="button" class="slots2-cell ' + esc(status) + '" title="' + esc(code) + '">' + n + '</button>');
+      cells.push('<button type="button" class="slots2-cell ' + esc(status) + '" data-slot="' + esc(code) + '" title="' + esc(code) + '">' + n + '</button>');
     }
 
     container.innerHTML = cells.join('');
@@ -799,11 +799,14 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
       const data = await api('admin_api.php?action=slot_detail&slot_number=' + encodeURIComponent(slotNumber));
       const s = data.slot;
       const active = Number(s.is_active) === 1;
+      const hasParticipant = !!s.session_id;
       const html = '<div style="padding:10px; background:#eef2ee; border-radius:8px">'
         + '<div><strong>Slot:</strong> ' + esc(s.slot_number) + '</div>'
         + '<div><strong>Type:</strong> ' + esc(typeNo(s.slot_type, s.slot_number)) + '</div>'
         + '<div><strong>Status:</strong> ' + esc(statusNo(s.status)) + '</div>'
         + '<div><strong>Deltaker:</strong> ' + esc(s.name || 'Ingen') + '</div>'
+        + '<div><strong>QR:</strong> ' + esc(hasParticipant ? (s.qr_code || '-') : '-') + '</div>'
+        + '<div><strong>Innlevert:</strong> ' + esc(hasParticipant ? (s.checkin_time || '-') : '-') + '</div>'
         + '<div style="margin-top:8px">'
         + '<button class="' + (active ? 'warn' : 'primary') + '" data-toggle-slot="' + Number(s.slot_id) + '" data-next="' + (active ? 0 : 1) + '">' + (active ? 'Sett ute av drift' : 'Aktiver slot') + '</button>'
         + (s.session_id ? ' <button class="danger" data-out="' + Number(s.session_id) + '">Utlever fra slot</button>' : '')
