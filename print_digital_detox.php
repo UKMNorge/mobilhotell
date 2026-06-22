@@ -87,25 +87,56 @@ function fetch_digital_detox_items(PDO $pdo, string $day): array
         p.qr_code,
         p.first_name,
         p.last_name,
-                p.phone_number,
-                p.county,
-                p.participant_type,
-        MIN(ps.checkin_time) AS first_checkin
+        p.phone_number,
+        p.county,
+        p.participant_type,
+        MIN(CASE
+            WHEN ps.checkin_time < ?
+             AND (ps.checkout_time IS NULL OR ps.checkout_time >= ?)
+            THEN GREATEST(ps.checkin_time, ?)
+            ELSE NULL
+        END) AS first_checkin,
+        MAX(CASE
+            WHEN ps.checkin_time < ?
+             AND ps.status = 'checked_out'
+             AND ps.checkout_time >= ?
+            THEN LEAST(ps.checkout_time, ?)
+            ELSE NULL
+        END) AS checkout_time
       FROM phone_sessions ps
       JOIN participants p ON p.id = ps.participant_id
-      WHERE ps.checkin_time >= ?
-        AND ps.checkin_time < ?
-        AND ps.checkin_time <= ?
-            GROUP BY p.id, p.qr_code, p.first_name, p.last_name, p.phone_number, p.county, p.participant_type
-      HAVING (
-        MAX(CASE WHEN ps.status = 'checked_out' AND ps.checkout_time >= ? THEN 1 ELSE 0 END) = 1
-        OR (
-          MAX(CASE WHEN ps.status = 'checked_in' THEN 1 ELSE 0 END) = 1
-          AND NOW() >= ?
-        )
-      )
+      WHERE ps.checkin_time < ?
+        AND (ps.checkout_time IS NULL OR ps.checkout_time >= ?)
+      GROUP BY p.id, p.qr_code, p.first_name, p.last_name, p.phone_number, p.county, p.participant_type
+      HAVING
+        MAX(CASE
+            WHEN ps.checkin_time < ?
+             AND (ps.checkout_time IS NULL OR ps.checkout_time >= ?)
+            THEN 1 ELSE 0
+        END) = 1
+        AND MAX(CASE
+            WHEN ps.checkin_time < ?
+             AND (
+                ps.status = 'checked_in'
+                OR (ps.status = 'checked_out' AND ps.checkout_time >= ?)
+             )
+            THEN 1 ELSE 0
+        END) = 1
       ORDER BY p.last_name ASC, p.first_name ASC");
-    $stmt->execute([$dayStart, $nextDay, $checkinDeadline, $detoxDeadline, $detoxDeadline]);
+    $stmt->execute([
+        $checkinDeadline,
+        $checkinDeadline,
+        $checkinDeadline,
+        $checkinDeadline,
+        $detoxDeadline,
+        $detoxDeadline,
+        $nextDay,
+        $dayStart,
+        $checkinDeadline,
+        $checkinDeadline,
+        $checkinDeadline,
+        $detoxDeadline,
+    ]);
 
     $rows = $stmt->fetchAll();
     foreach ($rows as &$row) {
@@ -123,7 +154,7 @@ function print_list(Printer $printer, string $day, array $items): void
     $printer->text("DIGITAL DETOX\n");
     $printer->selectPrintMode();
     $printer->text('Dag: ' . $day . "\n");
-    $printer->text("Innlevert innen 09:30\n");
+    $printer->text("Innlevert for 09:30\n");
     $printer->text("Beholdt til minst 18:30\n");
     $printer->text(str_repeat('-', 32) . "\n");
     $printer->setJustification(Printer::JUSTIFY_LEFT);

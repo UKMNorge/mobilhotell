@@ -168,23 +168,53 @@ function fetch_digital_detox_items(PDO $pdo, string $day): array
                 p.qr_code,
                 p.first_name,
                 p.last_name,
-                MIN(ps.checkin_time) AS first_checkin,
-                MAX(CASE WHEN ps.status = 'checked_out' THEN ps.checkout_time ELSE NULL END) AS checkout_time
+                MIN(CASE
+                    WHEN ps.checkin_time < ?
+                     AND (ps.checkout_time IS NULL OR ps.checkout_time >= ?)
+                    THEN GREATEST(ps.checkin_time, ?)
+                    ELSE NULL
+                END) AS first_checkin,
+                MAX(CASE
+                    WHEN ps.checkin_time < ?
+                     AND ps.status = 'checked_out'
+                     AND ps.checkout_time >= ?
+                    THEN LEAST(ps.checkout_time, ?)
+                    ELSE NULL
+                END) AS checkout_time
             FROM phone_sessions ps
             JOIN participants p ON p.id = ps.participant_id
-            WHERE ps.checkin_time >= ?
-                AND ps.checkin_time < ?
-                AND ps.checkin_time <= ?
+            WHERE ps.checkin_time < ?
+                AND (ps.checkout_time IS NULL OR ps.checkout_time >= ?)
             GROUP BY p.id, p.qr_code, p.first_name, p.last_name
-            HAVING (
-                MAX(CASE WHEN ps.status = 'checked_out' AND ps.checkout_time >= ? THEN 1 ELSE 0 END) = 1
-                OR (
-                    MAX(CASE WHEN ps.status = 'checked_in' THEN 1 ELSE 0 END) = 1
-                    AND NOW() >= ?
-                )
-            )
+            HAVING
+                MAX(CASE
+                    WHEN ps.checkin_time < ?
+                     AND (ps.checkout_time IS NULL OR ps.checkout_time >= ?)
+                    THEN 1 ELSE 0
+                END) = 1
+                AND MAX(CASE
+                    WHEN ps.checkin_time < ?
+                     AND (
+                        ps.status = 'checked_in'
+                        OR (ps.status = 'checked_out' AND ps.checkout_time >= ?)
+                     )
+                    THEN 1 ELSE 0
+                END) = 1
             ORDER BY p.last_name ASC, p.first_name ASC");
-        $stmt->execute([$dayStart, $nextDay, $checkinDeadline, $detoxDeadline, $detoxDeadline]);
+        $stmt->execute([
+            $checkinDeadline,
+            $checkinDeadline,
+            $checkinDeadline,
+            $checkinDeadline,
+            $detoxDeadline,
+            $detoxDeadline,
+            $nextDay,
+            $dayStart,
+            $checkinDeadline,
+            $checkinDeadline,
+            $checkinDeadline,
+            $detoxDeadline,
+        ]);
 
         $items = $stmt->fetchAll();
         foreach ($items as &$row) {

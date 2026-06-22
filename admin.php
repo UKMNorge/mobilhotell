@@ -275,8 +275,9 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
       <div class="detox-tools">
         <label for="detoxDay">Dag</label>
         <input id="detoxDay" type="date">
-        <button id="loadDetox" class="primary" type="button">Vis hvem som har klart</button>
+        <button id="loadDetox" class="primary" type="button">Vis hvem som er med</button>
         <button id="printDetox" class="warn" type="button">Skriv ut liste</button>
+        <a id="detoxStatsLink" class="btn-link ghost" href="digital_detox_stats.php" target="_blank" rel="noopener">Detox statistikk</a>
       </div>
       <div id="detoxMeta" style="font-size:18px; margin-bottom:8px; color:#29433c;"></div>
       <div id="detoxWrap">
@@ -407,6 +408,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   const detoxDay = document.getElementById('detoxDay');
   const loadDetox = document.getElementById('loadDetox');
   const printDetox = document.getElementById('printDetox');
+  const detoxStatsLink = document.getElementById('detoxStatsLink');
   const detoxMeta = document.getElementById('detoxMeta');
   const detoxBody = document.getElementById('detoxBody');
   const screentimeBody = document.getElementById('screentimeBody');
@@ -433,7 +435,7 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   let autoOn = true;
   let poll = null;
   let searchTimer = null;
-  const idleMs = 30000;
+  const idleMs = 60000;
   let idleTimer = null;
   let screentimeItems = [];
   let currentView = 'health';
@@ -540,10 +542,18 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
     }
 
     const count = Number(data.count || 0);
-    const doneText = data.day_complete ? 'Dagen er ferdig evaluert.' : 'Dagen er ikke ferdig evaluert enda (for 18:30).';
-    detoxMeta.textContent = data.day + ' - ' + count + ' klarte Digital Detox. ' + doneText;
+    const doneText = data.day_complete ? 'Dagen er ferdig evaluert.' : 'Dagen pågår (frem til 18:30).';
+    const countText = data.day_complete
+      ? (count + ' klarte Digital Detox.')
+      : (count + ' er med i Digital Detox akkurat nå.');
+    detoxMeta.textContent = data.day + ' - ' + countText + ' ' + doneText;
     renderDetox(data.items || []);
     lastDetoxLoadAt = now;
+  }
+
+  function syncDetoxStatsLink() {
+    const day = detoxDay.value || todayIso();
+    detoxStatsLink.href = 'digital_detox_stats.php?from=' + encodeURIComponent(day) + '&to=' + encodeURIComponent(day);
   }
 
   async function printDigitalDetoxList() {
@@ -920,13 +930,17 @@ th, td { border-bottom: 1px solid #e4e8e4; padding: 10px; text-align: left; font
   clearScreentime.addEventListener('click', clearScreentimeLog);
   loadDetox.addEventListener('click', () => loadDigitalDetox(true));
   printDetox.addEventListener('click', printDigitalDetoxList);
-  detoxDay.addEventListener('change', () => loadDigitalDetox(true));
+  detoxDay.addEventListener('change', () => {
+    syncDetoxStatsLink();
+    loadDigitalDetox(true);
+  });
 
   ['pointerdown', 'keydown', 'touchstart', 'scroll', 'mousemove'].forEach((evt) => {
     window.addEventListener(evt, restartIdleTimer, { passive: true });
   });
 
   detoxDay.value = todayIso();
+  syncDetoxStatsLink();
   poll = setInterval(() => loadAll(false), 15000);
   loadCursorSetting();
   restartIdleTimer();
