@@ -39,6 +39,24 @@ h1 {
   margin: 8px 0 2px;
   font-size: clamp(42px, 4.2vw, 58px);
 }
+.page-clock {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(9, 22, 20, 0.86);
+  border: 1px solid rgba(255,255,255,.22);
+  color: #fff;
+  font-size: clamp(44px, 7vw, 92px);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+body.mode-storage .page-clock {
+  background: rgba(46, 21, 54, 0.88);
+}
 .top-tools {
   position: fixed;
   left: 0;
@@ -562,6 +580,12 @@ body.showing-card .avatar {
   height: clamp(220px, 27vh, 320px);
 }
 @media (max-width: 780px) {
+  .page-clock {
+    top: 10px;
+    left: 8px;
+    font-size: clamp(34px, 12vw, 64px);
+    padding: 8px 12px;
+  }
   main {
     padding-left: 14px;
   }
@@ -692,7 +716,7 @@ body.showing-card .avatar {
 }
 @media print {
   body { background: #fff; color: #111; }
-  main > h1, main > p, #search, #results, #loading, .top-tools, .mode-switch { display: none !important; }
+  .page-clock, main > h1, main > p, #search, #results, #loading, .top-tools, .mode-switch { display: none !important; }
   #view { margin-top: 0; }
   .card { background: #fff; border: 1px solid #ddd; color: #111; }
   .print-only { display: block; }
@@ -700,6 +724,7 @@ body.showing-card .avatar {
 </style>
 </head>
 <body>
+<div id="pageClock" class="page-clock" aria-live="polite">--:--</div>
 <main>
   <div class="mode-switch">
     <button id="modePhone" class="mode-btn mode-phone active" type="button">Mobilhotell UKM</button>
@@ -762,6 +787,7 @@ body.showing-card .avatar {
   const generalLabelStatus = document.getElementById('generalLabelStatus');
   const pageTitle = document.getElementById('pageTitle');
   const pageSubhead = document.getElementById('pageSubhead');
+  const pageClock = document.getElementById('pageClock');
   const adminPanel = document.getElementById('adminPanel');
   const capacityGrid = document.getElementById('capacityGrid');
   const osk = document.getElementById('osk');
@@ -856,6 +882,13 @@ body.showing-card .avatar {
 
   function setLoading(on) {
     loading.style.display = on ? 'block' : 'none';
+  }
+
+  function updateClock() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    pageClock.textContent = hh + ':' + mm;
   }
 
   function formatHoursMinutes(totalSeconds) {
@@ -1294,8 +1327,10 @@ body.showing-card .avatar {
   window.addEventListener('offline', updateNetState);
   window.addEventListener('resize', fitReceiptToViewport);
   updateNetState();
+  updateClock();
   loadCapacity();
   applyModeUI();
+  setInterval(updateClock, 10000);
   setInterval(loadCapacity, 15000);
 
   createKeyboard();
